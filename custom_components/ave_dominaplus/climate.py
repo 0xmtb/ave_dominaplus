@@ -10,6 +10,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .ave_thermostat import AveThermostatProperties
 from .const import BRAND_PREFIX
 from .web_server import AveWebServer
 
@@ -42,6 +43,7 @@ async def async_setup_entry(
 
 
 async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
+    return
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
@@ -88,6 +90,7 @@ def update_thermostat(
     server: AveWebServer, family, ave_device_id, device_status, name=None
 ):
     """Update switch based on the family and device status."""
+    return
     if family == 1:
         if not server.settings.fetch_lights:
             return
@@ -167,7 +170,7 @@ class AveThermostat(ClimateEntity):
         webserver: AveWebServer | None = None,
         ave_name: str | None = None,
     ) -> None:
-        """Initialize the motion detection sensor."""
+        """Initialize the thermostat sensor."""
         self._unique_id = unique_id
         self._is_on = is_on
         self.ave_device_id = ave_device_id
@@ -175,7 +178,7 @@ class AveThermostat(ClimateEntity):
         self._webserver = webserver
         self._ave_name = ave_name
         self.hass = self._webserver.hass
-
+        self.ave_properties: AveThermostatProperties | None = None
         if is_on is not None and is_on >= 0:
             self._attr_is_on = bool(is_on)  # Initialize the state
 
@@ -183,6 +186,10 @@ class AveThermostat(ClimateEntity):
             self._name = self.build_name()
         else:
             self._name = name
+
+    def update_from_wts(self, parameters: list[str], records: list[list[str]]):
+        """Update the thermostat properties from WTS data."""
+        self.ave_properties = AveThermostatProperties.from_wts(parameters, records)
 
     async def async_toggle(self, **kwargs: Any) -> None:
         """Toggle the switch."""
