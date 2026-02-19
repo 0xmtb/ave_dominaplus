@@ -31,6 +31,7 @@ class AveWebServerSettings:
         self.fetch_sensors = False
         self.fetch_lights = False
         self.fetch_scenarios = False
+        self.fetch_thermostats = False
 
 
 class AveWebServer:
@@ -50,6 +51,7 @@ class AveWebServer:
             self.settings.fetch_sensor_areas = settings_data["fetch_sensor_areas"]
             self.settings.fetch_sensors = settings_data["fetch_sensors"]
             self.settings.fetch_lights = settings_data["fetch_lights"]
+            self.settings.fetch_thermostats = settings_data["fetch_thermostats"]
         except KeyError as e:
             _LOGGER.error("Missing key in settings data: %s", e)
         self.mac_address = ""
@@ -66,6 +68,9 @@ class AveWebServer:
         self.switches: dict = {}  # Track switches by unique ID
         self.async_add_sw_entities: Any = None
         self.update_switch: Any = None
+        self.thermostats: dict = {}  # Track thermostats by unique ID
+        self.async_add_th_entities: Any = None
+        self.update_thermostat: Any = None
 
     async def set_update_binary_sensor(self, func) -> None:
         """Set the set_update_binary_sensor method for binary sensors."""
@@ -74,6 +79,10 @@ class AveWebServer:
     async def set_update_switch(self, func) -> None:
         """Set the set_update_switch method for switches."""
         self.update_switch = func
+
+    async def set_update_thermostat(self, func) -> None:
+        """Set the set_update_thermostat method for thermostats."""
+        self.update_thermostat = func
 
     async def set_async_add_bs_entities(self, func) -> None:
         """Set the async_add_entities method for binary sensors."""
@@ -84,6 +93,11 @@ class AveWebServer:
         """Set the async_add_entities method for switches."""
         if self.async_add_sw_entities is None:
             self.async_add_sw_entities = func
+
+    async def set_async_add_th_entities(self, func) -> None:
+        """Set the async_add_entities method for thermostats."""
+        if self.async_add_th_entities is None:
+            self.async_add_th_entities = func
 
     async def is_connected(self) -> bool:
         """Return if the web server is connected."""
