@@ -26,6 +26,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required("fetch_sensor_areas", default=True): bool,
         vol.Required("fetch_sensors", default=True): bool,
         vol.Required("fetch_lights", default=True): bool,
+        vol.Required("fetch_thermostats", default=True): bool,
     }
 )
 
