@@ -248,6 +248,9 @@ class AveThermostat(ClimateEntity):
                 int(self.ave_properties.fan_level), first_update=first_update
             )
 
+        if str(self.ave_properties.local_off) == "1":
+            self._attr_hvac_mode = HVACMode.OFF
+
         if not first_update:
             self.async_write_ha_state()
 
@@ -269,10 +272,13 @@ class AveThermostat(ClimateEntity):
             _fan_level: int = int(value) if value is not None else -1
             self.update_from_fan_level(_fan_level)
         elif property_name == "local_off":
-            self._attr_hvac_mode = (
-                HVACMode.OFF if value == "1" else self._attr_hvac_mode
-            )
-            self.ave_properties.local_off = value
+            self.ave_properties.local_off = str(value)
+            if self.ave_properties.local_off == "1":
+                self._attr_hvac_mode = HVACMode.OFF
+            elif str(self.ave_properties.season) == "0":
+                self._attr_hvac_mode = HVACMode.COOL
+            else:
+                self._attr_hvac_mode = HVACMode.HEAT
         elif property_name == "offset":
             self.ave_properties.offset = value
             pass  # Offset is not directly represented in Home Assistant's climate entity model
