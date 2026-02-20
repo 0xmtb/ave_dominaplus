@@ -44,7 +44,6 @@ async def async_setup_entry(
 async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
     """Adopt existing sensors from the entity registry."""
     try:
-        return
         entity_registry = er.async_get(server.hass)
         if entity_registry is None:
             return
@@ -53,28 +52,29 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
             if not (entity.platform == "ave_dominaplus" and entity.domain == "number"):
                 continue
             # Check if the sensor is already registered
-            if entity.unique_id not in server.thermostats:
+            if entity.unique_id not in server.numbers:
                 # Create a new sensor instance
-                family = int(entity.unique_id.split("_")[2])
-                ave_device_id = int(entity.unique_id.split("_")[3])
+                family = int(entity.unique_id.split("_")[4])
+                ave_device_id = int(entity.unique_id.split("_")[5])
                 name = None
                 if entity.name is not None:
                     name = entity.name
                 elif entity.original_name is not None:
                     name = entity.original_name
 
-                sensor = LightSwitch(
+                sensor = ThermostatOffset(
                     unique_id=entity.unique_id,
                     family=family,
                     ave_device_id=ave_device_id,
-                    is_on=None,
                     name=name,
+                    webserver=server,
+                    value=None,
                 )
                 sensor.hass = server.hass
                 sensor.entity_id = entity.entity_id
 
-                server.switches[entity.unique_id] = sensor
-                server.async_add_sw_entities([sensor])
+                server.numbers[entity.unique_id] = sensor
+                server.async_add_number_entities([sensor])
     except Exception as e:  # noqa: BLE001
         _LOGGER.error("Error adopting existing sensors: %s", str(e))
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
@@ -176,8 +176,8 @@ class ThermostatOffset(SensorEntity):
         self._unique_id = unique_id
         self.ave_device_id = ave_device_id
         self.family = family
-        self._webserver = webserver
         self._ave_name = ave_name
+        self._webserver = webserver
         self.hass = self._webserver.hass
 
         if name is None:

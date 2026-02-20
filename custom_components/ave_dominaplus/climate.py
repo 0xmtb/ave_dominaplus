@@ -52,13 +52,12 @@ async def async_setup_entry(
 
     await webserver.set_async_add_th_entities(async_add_entities)
     await webserver.set_update_thermostat(update_thermostat)
-    if not webserver.settings.fetch_lights:
-        return
     await adopt_existing_sensors(webserver, entry)
+    if not webserver.settings.fetch_thermostats:
+        return
 
 
 async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
-    return
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
@@ -71,26 +70,28 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
             # Check if the sensor is already registered
             if entity.unique_id not in server.thermostats:
                 # Create a new sensor instance
-                family = int(entity.unique_id.split("_")[2])
-                ave_device_id = int(entity.unique_id.split("_")[3])
+                family = int(entity.unique_id.split("_")[3])
+                ave_device_id = int(entity.unique_id.split("_")[4])
                 name = None
                 if entity.name is not None:
                     name = entity.name
                 elif entity.original_name is not None:
                     name = entity.original_name
-
-                sensor = AveThermostat(
+                properties = AveThermostatProperties()
+                properties.device_id = ave_device_id
+                thermostat = AveThermostat(
                     unique_id=entity.unique_id,
                     family=family,
-                    ave_device_id=ave_device_id,
-                    is_on=None,
+                    ave_properties=None,
+                    webserver=server,
                     name=name,
                 )
-                sensor.hass = server.hass
-                sensor.entity_id = entity.entity_id
 
-                server.switches[entity.unique_id] = sensor
-                server.async_add_sw_entities([sensor])
+                thermostat.hass = server.hass
+                thermostat.entity_id = entity.entity_id
+
+                server.thermostats[entity.unique_id] = thermostat
+                server.async_add_th_entities([thermostat])
     except Exception as e:  # noqa: BLE001
         _LOGGER.error("Error adopting existing sensors: %s", str(e))
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
