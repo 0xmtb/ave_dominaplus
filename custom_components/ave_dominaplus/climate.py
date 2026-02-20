@@ -2,13 +2,19 @@
 
 import logging
 from typing import Any
+from unittest import case
 
 from homeassistant.components.climate import (
     DEFAULT_MAX_TEMP,
+    FAN_OFF,
+    FAN_LOW,
+    FAN_MEDIUM,
+    FAN_HIGH,
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
 )
+from homeassistant.components.climate.const import HVACAction
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PRECISION_TENTHS, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -22,14 +28,8 @@ from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
 
-SUPPORT_FLAGS = (
-    ClimateEntityFeature.TARGET_TEMPERATURE
-    # | ClimateEntityFeature.PRESET_MODE
-    # | ClimateEntityFeature.TURN_OFF
-    # | ClimateEntityFeature.TURN_ON
-)
-PRESET_SCHEDULE = "schedule"
-PRESET_MANUAL = "manual"
+PRESET_SCHEDULE = "Schedule"
+PRESET_MANUAL = "Manual"
 
 
 async def async_setup_entry(
@@ -105,7 +105,9 @@ def update_thermostat(
     server: AveWebServer,
     family: int,
     ave_device_id: int,
-    properties: AveThermostatProperties,
+    properties: AveThermostatProperties | None = None,
+    property_name: str | None = None,
+    property_value: Any = None,
 ):
     """Update thermostat based on the family and device status."""
 
@@ -118,11 +120,19 @@ def update_thermostat(
         thermostat: AveThermostat = server.thermostats[unique_id]
         if properties is not None:
             thermostat.update_state(properties)
-        if properties.device_name is not None and server.settings.get_entity_names:
-            thermostat.set_ave_name(properties.device_name)
-            if not check_name_changed(server.hass, unique_id):
-                thermostat.set_name(properties.device_name)
+            if properties.device_name is not None and server.settings.get_entity_names:
+                thermostat.set_ave_name(properties.device_name)
+                if not check_name_changed(server.hass, unique_id):
+                    thermostat.set_name(properties.device_name)
+        elif property_name is not None and property_value is not None:
+            thermostat.update_specific_property(property_name, property_value)
     else:
+        if properties is None:
+            _LOGGER.debug(
+                "Received update for thermostat device_id %s but properties is None; skipping",
+                ave_device_id,
+            )
+            return
         # Create a new thermostat entity
         entity_name = None
         if properties.device_name is not None and server.settings.get_entity_names:
@@ -163,11 +173,19 @@ def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
 class AveThermostat(ClimateEntity):
     """Representation of a thermostat controller."""
 
-    _attr_hvac_mode = HVACMode.AUTO
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.FAN_MODE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.PRESET_MODE
+    )
+    _attr_fan_modes = [FAN_OFF, FAN_LOW, FAN_MEDIUM, FAN_HIGH]
+    _attr_fan_mode = FAN_OFF
+    _attr_hvac_modes = [HVACMode.COOL, HVACMode.HEAT, HVACMode.OFF]
+    _attr_hvac_mode = HVACMode.OFF
     _attr_max_temp = DEFAULT_MAX_TEMP
     _attr_preset_modes = [PRESET_MANUAL, PRESET_SCHEDULE]
-
-    _attr_supported_features = SUPPORT_FLAGS
     _attr_target_temperature_step = PRECISION_TENTHS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_translation_key = "thermostat"
@@ -198,12 +216,7 @@ class AveThermostat(ClimateEntity):
         else:
             self._name = ave_properties.device_name
 
-        self._attr_capability_attributes = {
-            "supported_features": [ClimateEntityFeature.TARGET_TEMPERATURE]
-        }
-
         self._selected_schedule = None
-        self._attr_hvac_modes = [HVACMode.AUTO, HVACMode.HEAT]
         self.update_all_properties(ave_properties, first_update=True)
 
     def update_from_wts(self, parameters: list[str], records: list[list[str]]):
@@ -219,28 +232,159 @@ class AveThermostat(ClimateEntity):
         self._attr_current_temperature = self.ave_properties.temperature
         self._attr_target_temperature = self.ave_properties.set_point
 
-        if self.ave_properties.mode in {"1F", "1"}:
+        if self.ave_properties.mode in {"1F", "1", "M"}:
             self._attr_preset_mode = PRESET_MANUAL
         else:
             self._attr_preset_mode = PRESET_SCHEDULE
 
+        if str(self.ave_properties.season) == "0":
+            self._attr_hvac_mode = HVACMode.COOL
+        else:
+            self._attr_hvac_mode = HVACMode.HEAT
+
+        if int(self.ave_properties.fan_level) >= 0:
+            self.update_from_fan_level(
+                int(self.ave_properties.fan_level), first_update=first_update
+            )
+
         if not first_update:
             self.async_write_ha_state()
 
-    async def async_toggle(self, **kwargs: Any) -> None:
-        """Toggle the switch."""
-        if self._webserver:
-            await self._webserver.switch_toggle(self.ave_device_id)
+    def update_specific_property(self, property_name: str, value: Any):
+        """Update a specific property of the thermostat."""
+        if property_name == "temperature":
+            self._attr_current_temperature = value
+            self.ave_properties.temperature = value
+        elif property_name == "set_point":
+            self._attr_target_temperature = value
+            self.ave_properties.set_point = value
+        elif property_name == "mode":
+            if value in {"1F", "1", "M"}:
+                self._attr_preset_mode = PRESET_MANUAL
+            else:
+                self._attr_preset_mode = PRESET_SCHEDULE
+            self.ave_properties.mode = value
+        elif property_name == "fan_level":
+            _fan_level: int = int(value) if value is not None else -1
+            self.update_from_fan_level(_fan_level)
+        elif property_name == "local_off":
+            self._attr_hvac_mode = (
+                HVACMode.OFF if value == "1" else self._attr_hvac_mode
+            )
+            self.ave_properties.local_off = value
+        elif property_name == "offset":
+            self.ave_properties.offset = value
+            pass  # Offset is not directly represented in Home Assistant's climate entity model
+        elif property_name == "season":
+            if value == 0:
+                self._attr_hvac_mode = HVACMode.COOL
+            elif value == 1:
+                self._attr_hvac_mode = HVACMode.HEAT
+            self.ave_properties.season = value
+        elif property_name == "window_state":
+            pass  # Window state is not directly represented in Home Assistant's climate entity model
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the switch on."""
-        if self._webserver:
-            await self._webserver.switch_turn_on(self.ave_device_id)
+        self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the switch off."""
+    def update_from_fan_level(self, fan_level: int, first_update: bool = False):
+        """Update the thermostat properties based on the fan level."""
+        if fan_level <= 0:
+            self._attr_hvac_action = HVACAction.OFF
+        elif self._attr_hvac_mode == HVACMode.HEAT:
+            self._attr_hvac_action = HVACAction.HEATING
+        elif self._attr_hvac_mode == HVACMode.COOL:
+            self._attr_hvac_action = HVACAction.COOLING
+
+        match fan_level:
+            case 0:
+                self._attr_fan_mode = FAN_OFF
+            case 1:
+                self._attr_fan_mode = FAN_LOW
+            case 2:
+                self._attr_fan_mode = FAN_MEDIUM
+            case 3:
+                self._attr_fan_mode = FAN_HIGH
+
+        if not first_update:
+            self.async_write_ha_state()
+
+    async def async_set_temperature(self, **kwargs):
+        """Set new target temperature."""
+        season = None
+        season = (
+            self.ave_properties.season
+            if self.ave_properties.season and self.ave_properties != ""
+            else None
+        )
+        if season is None:
+            _LOGGER.error(
+                "Cannot set temperature: season is not defined for device_id %s",
+                self.ave_properties.device_id,
+            )
+            return
+        parameters = [str(self.ave_properties.device_id)]
+        records = [[season, 1, int(kwargs.get("temperature") * 10)]]
         if self._webserver:
-            await self._webserver.switch_turn_off(self.ave_device_id)
+            await self._webserver.send_thermostat_sts(
+                parameters=parameters, records=records
+            )
+
+    async def async_set_fan_mode(self, fan_mode):
+        """Set new target fan mode.
+
+        Fan mode is readonly in AVE dominaplus thermostats, so this method does nothing.
+        """
+        return
+
+    async def async_set_preset_mode(self, preset_mode):
+        """Set new target preset mode."""
+        season = None
+        season = (
+            self.ave_properties.season
+            if self.ave_properties.season and self.ave_properties != ""
+            else None
+        )
+        if season is None:
+            _LOGGER.error(
+                "Cannot set preset mode: season is not defined for device_id %s",
+                self.ave_properties.device_id,
+            )
+            return
+        parameters = [str(self.ave_properties.device_id)]
+        _mode = 1 if preset_mode == PRESET_MANUAL else 0
+        records = [[season, _mode, int(self._attr_target_temperature * 10)]]
+        if self._webserver:
+            await self._webserver.send_thermostat_sts(
+                parameters=parameters, records=records
+            )
+
+    async def async_set_hvac_mode(self, hvac_mode):
+        """Set new target hvac mode."""
+        if hvac_mode == HVACMode.OFF:
+            await self._webserver.thermostat_on_off(
+                device_id=self.ave_properties.device_id, on_off=0
+            )
+        elif hvac_mode in {HVACMode.HEAT, HVACMode.COOL}:
+            season = 1 if hvac_mode == HVACMode.HEAT else 0
+            parameters = [str(self.ave_properties.device_id)]
+            _mode = 1 if self._attr_preset_mode == PRESET_MANUAL else 0
+            records = [[season, _mode, int(self._attr_target_temperature * 10)]]
+            if self._webserver:
+                await self._webserver.send_thermostat_sts(
+                    parameters=parameters, records=records
+                )
+
+    async def async_turn_on(self):
+        """Turn the entity on."""
+        await self._webserver.thermostat_on_off(
+            device_id=self.ave_properties.device_id, on_off=1
+        )
+
+    async def async_turn_off(self):
+        """Turn the entity off."""
+        await self._webserver.thermostat_on_off(
+            device_id=self.ave_properties.device_id, on_off=0
+        )
 
     @property
     def unique_id(self) -> str:
@@ -259,17 +403,8 @@ class AveThermostat(ClimateEntity):
             "AVE_family": self.family,
             "AVE_device_id": self.ave_properties.device_id,
             "AVE_name": self.ave_properties.device_name,
+            "offset": self.ave_properties.offset,
         }
-
-    def update_state(self, is_on: int):
-        """Update the state of the switch."""
-        return
-        if is_on is None:
-            return
-        if is_on < 0:
-            return
-        self._attr_is_on = bool(is_on)  # Set the state to True (on) or False (off)
-        self.async_write_ha_state()
 
     def update_ave_properties(self, properties: AveThermostatProperties):
         """Update the AVE properties of the thermostat."""
@@ -282,12 +417,6 @@ class AveThermostat(ClimateEntity):
             return
         self._name = name
         self.async_write_ha_state()
-
-    def set_ave_name(self, name: str | None):
-        """Set the AVE name of the sensor."""
-        if name is not None:
-            self._ave_name = name
-            self.async_write_ha_state()
 
     def build_name(self) -> str:
         """Build the name of the sensor based on its family and device ID."""

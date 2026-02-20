@@ -407,14 +407,88 @@ class AveWebServer:
                 pass
             elif parameters[1] == "Z":  # DAIKIN LOCALOFF
                 pass
-        elif (
-            parameters[0] == "TT" or parameters[0] == "TP" or parameters[0] == "TR"
-        ):  # THERMOSTAT TEMPERATURE
-            pass
-        elif (
-            parameters[0] == "TLO" or parameters[0] == "D"
-        ):  # THERMOSTAT LOCAL OFF (requires SU2)
-            pass
+        elif parameters[0] == "TM":
+            self.update_thermostat(
+                server=self,
+                family=4,
+                ave_device_id=int(parameters[1]),
+                property_name="mode",
+                property_value=parameters[2],
+            )
+        elif parameters[0] == "TW":
+            self.update_thermostat(
+                server=self,
+                family=4,
+                ave_device_id=int(parameters[1]),
+                property_name="window_state",
+                property_value=int(parameters[2]),
+            )
+        elif parameters[0] == "TP":
+            self.update_thermostat(
+                server=self,
+                family=4,
+                ave_device_id=int(parameters[1]),
+                property_name="set_point",
+                property_value=int(parameters[2]) / 10,
+            )
+        elif parameters[0] in ["TT", "TR", "TL", "TLO", "TO", "TS"]:  # THERMOSTAT
+            if (
+                not self.ave_map
+                or not self.ave_map.areas_loaded
+                or not self.ave_map.command_loaded
+            ):
+                _LOGGER.debug(
+                    "Received thermostat update before map/commands loaded; skipping"
+                )
+                return
+            _command = self.ave_map.GetCommandByIdAndFamily(int(parameters[1]), 4)
+            if not _command:
+                _LOGGER.debug(
+                    "Received thermostat update for unknown command ID %s; skipping",
+                    parameters[1],
+                )
+                return
+
+            if parameters[0] == "TT":
+                self.update_thermostat(
+                    server=self,
+                    family=4,
+                    ave_device_id=_command.device_id,
+                    property_name="temperature",
+                    property_value=int(parameters[2]) / 10,
+                )
+            elif parameters[0] == "TL":
+                self.update_thermostat(
+                    server=self,
+                    family=4,
+                    ave_device_id=_command.device_id,
+                    property_name="fan_level",
+                    property_value=int(parameters[2]),
+                )
+            elif parameters[0] == "TLO":
+                self.update_thermostat(
+                    server=self,
+                    family=4,
+                    ave_device_id=_command.device_id,
+                    property_name="local_off",
+                    property_value=(1 if int(parameters[2]) == 0 else 0),
+                )
+            elif parameters[0] == "TO":
+                self.update_thermostat(
+                    server=self,
+                    family=4,
+                    ave_device_id=_command.device_id,
+                    property_name="offset",
+                    property_value=int(parameters[2]),
+                )
+            elif parameters[0] == "TS":
+                self.update_thermostat(
+                    server=self,
+                    family=4,
+                    ave_device_id=_command.device_id,
+                    property_name="season",
+                    property_value=int(parameters[2]),
+                )
         elif parameters[0] == "GUI":
             # Reload gui
             pass
@@ -519,7 +593,12 @@ class AveWebServer:
             if command and command.command_name:
                 thermostatProperties.device_name = command.command_name
 
-        self.update_thermostat(self, 4, device_id, thermostatProperties)
+        self.update_thermostat(
+            server=self,
+            family=4,
+            ave_device_id=device_id,
+            properties=thermostatProperties,
+        )
 
     async def switch_turn_on(self, device_id: int):
         """Turn on the switch."""
@@ -539,6 +618,20 @@ class AveWebServer:
         """Turn off the switch."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), "10"])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def send_thermostat_sts(self, parameters, records):
+        """Send a command to update the thermostat season/temperatures."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("STS", parameters, records)
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def thermostat_on_off(self, device_id: int, on_off: int):
+        """Send a command to update the thermostat season/temperatures."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("TOO", [str(device_id), str(on_off)])
         else:
             _LOGGER.error("WebSocket is not connected")
 
