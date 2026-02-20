@@ -1,8 +1,15 @@
-from homeassistant.backup_restore import _LOGGER
+"""AVE maps and maps commands."""
+
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class AveMapCommand:
-    def __init__(self):
+    """Represents a command in the AVE map."""
+
+    def __init__(self) -> None:
+        """Initialize an AveMapCommand instance."""
         self.command_id: int = -1
         self.command_name: str = ""
         self.command_type: int = -1
@@ -28,6 +35,7 @@ class AveMapCommand:
 
     @classmethod
     def FromWsRecord(cls, record: list[str]):
+        """Create an AveMapCommand instance from a websocket record."""
         instance = cls()
         try:
             instance.command_id = int(cls._readRecordValue(record, 0))
@@ -56,7 +64,10 @@ class AveMapCommand:
 
 
 class AveArea:
-    def __init__(self, id: int, name: str, order: int):
+    """Represents an area in the AVE map."""
+
+    def __init__(self, id: int, name: str, order: int) -> None:
+        """Initialize an AveArea instance."""
         self.id: int = id
         self.name: str = name
         self.order: int = order
@@ -65,12 +76,16 @@ class AveArea:
 
 
 class AveMap:
-    def __init__(self):
+    """Represents the complete AVE map structure."""
+
+    def __init__(self) -> None:
+        """Initialize an AveMap instance."""
         self.areas_loaded: bool = False
         self.command_loaded: bool = False
         self.areas: dict[int, AveArea] = {}
 
     def LoadAreasFromWsRecords(self, records: list[list]):
+        """Load areas from websocket reply records."""
         for record in records:
             area_id = int(record[0])
             area_name = record[1]
@@ -79,27 +94,30 @@ class AveMap:
         self.areas_loaded = True
 
     def LoadAreaCommands(self, area_id: int, records: list[list[str]]):
+        """Load commands for a specific area from websocket reply records."""
         area = self.areas.get(area_id)
         if area:
-            for record in records:
-                command = AveMapCommand.FromWsRecord(record)
-                area.commands.append(command)
+            area.commands.extend(
+                AveMapCommand.FromWsRecord(record) for record in records
+            )
             area.commands_loaded = True
 
             if all(a.commands_loaded for a in self.areas.values()):
                 self.command_loaded = True
 
     def GetCommandsByFamily(self, family: int) -> list[AveMapCommand]:
+        """Get all commands for a specific device family."""
         commands: list[AveMapCommand] = []
         for area in self.areas.values():
-            for command in area.commands:
-                if command.device_family == family:
-                    commands.append(command)
+            commands.extend(
+                command for command in area.commands if command.device_family == family
+            )
         return commands
 
     def GetCommandByIdAndFamily(
         self, command_id: int, family: int
     ) -> AveMapCommand | None:
+        """Get a specific command by its ID and device family."""
         for area in self.areas.values():
             for command in area.commands:
                 if command.command_id == command_id and command.device_family == family:
@@ -107,6 +125,7 @@ class AveMap:
         return None
 
     def GetCommandByDeviceId(self, device_id: int) -> AveMapCommand | None:
+        """Get a specific command by its device ID."""
         for area in self.areas.values():
             for command in area.commands:
                 if command.device_id == device_id:
@@ -116,11 +135,13 @@ class AveMap:
     def GetCommandByDeviceIdAndFamily(
         self, device_id: int, family: int
     ) -> AveMapCommand | None:
+        """Get a specific command by its device ID and family."""
         for area in self.areas.values():
             for command in area.commands:
                 if command.device_id == device_id and command.device_family == family:
                     return command
         return None
 
-    def get_map(self, map_name):
+    def get_map(self, map_name: str) -> AveArea | None:
+        """Get a specific map by its name."""
         return self.areas.get(map_name)

@@ -81,8 +81,8 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 
 def set_sensor_uid(webserver: AveWebServer, family, ave_device_id):
     """Set the unique ID for the sensor."""
-    # TODO: This will ready up for multi-hub configurations but breack existing installations
-    # return f"ave_{webserver.mac_address}_switch_{family}_{ave_device_id}"  # Unique ID for the sensor
+    # TODO: This will ready up for multi-hub configurations but break existing installations
+    # return f"ave_{webserver.mac_address}_switch_{family}_{ave_device_id}"
     return f"ave_switch_{family}_{ave_device_id}"
 
 

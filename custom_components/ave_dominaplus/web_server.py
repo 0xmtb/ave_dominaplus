@@ -286,7 +286,7 @@ class AveWebServer:
                 command, *parameters = cmd_params.split(chr(0x1D))
                 records = [record.split(chr(0x1D)) for record in records_data]
                 await self.manage_commands(command, parameters, records)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             _LOGGER.error("Error processing message", exc_info=e)
 
     async def send_ws_command(self, command, parameters=None, records=None):
@@ -318,9 +318,7 @@ class AveWebServer:
         if self.ws_conn and not self.ws_conn.closed:
             await self.ws_conn.send_str(full_message)
             escaped_message = full_message.encode("unicode_escape").decode("ascii")
-            escaped_message = (
-                full_message.encode("unicode_escape").decode("ascii")
-            )
+            escaped_message = full_message.encode("unicode_escape").decode("ascii")
             _LOGGER.debug("Sent command: %s", escaped_message)
         else:
             _LOGGER.error("WebSocket is not connected")
@@ -483,7 +481,14 @@ class AveWebServer:
                 property_name="set_point",
                 property_value=int(parameters[2]) / 10,
             )
-        elif parameters[0] in ["TT", "TR", "TL", "TLO", "TO", "TS"]:  # THERMOSTAT
+        elif parameters[0] in [
+            "TT",
+            "TR",
+            "TL",
+            "TLO",
+            "TO",
+            "TS",
+        ]:  # THERMOSTAT
             if (
                 not self.ave_map
                 or not self.ave_map.areas_loaded
@@ -603,7 +608,9 @@ class AveWebServer:
                 pass
             else:
                 _LOGGER.debug(
-                    "Unknown device type %s for %s, skipping", device_type, device_name
+                    "Unknown device type %s for %s, skipping",
+                    device_type,
+                    device_name,
                 )
                 continue
 
@@ -712,6 +719,7 @@ class AveWebServer:
                 return 900, None
 
     async def tryget_mac_address(self) -> str | None:
+        """Try to get the MAC address of the web server using the revealcode.php bridge."""
         async with aiohttp.ClientSession() as session:
             try:
                 url = f"http://{self.settings.host}/revealcode.php"

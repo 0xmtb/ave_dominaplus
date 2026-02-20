@@ -1,3 +1,6 @@
+"""AVE Dominaplus thermostat datatypes."""
+
+
 class AveThermostatProperties:
     """Store thermostat data."""
 
@@ -33,8 +36,7 @@ class AveThermostatProperties:
         def get_record_value(index):
             if len(records) > 0 and len(records[0]) > index:
                 return records[0][index]
-            else:
-                return None
+            return None
 
         props = AveThermostatProperties()
         props.device_id = (
@@ -53,7 +55,8 @@ class AveThermostatProperties:
         props.temperature = (
             int(get_record_value(5)) / 10 if get_record_value(5) is not None else None
         )
-        props.mode = "1F" if int(get_record_value(8)) == 1 else get_record_value(6)
+        mode_record = get_record_value(8)
+        props.mode = "1F" if int(mode_record) == 1 else get_record_value(6)
         props.set_point = (
             int(get_record_value(7)) / 10 if get_record_value(7) is not None else None
         )

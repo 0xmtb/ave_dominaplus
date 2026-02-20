@@ -11,7 +11,6 @@ import voluptuous as vol
 import homeassistant
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_IP_ADDRESS
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
@@ -87,13 +86,16 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         return self.async_show_form(
-            step_id="reconfigure", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="reconfigure",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
         )
 
     async def validate_input(self, data: dict[str, Any]) -> dict[str, Any]:
         """Validate the user input allows us to connect.
 
-        Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
+        Data has the keys from STEP_USER_DATA_SCHEMA
+        with values provided by the user.
         """
         webserver = AveWebServer(settings_data=MappingProxyType(data), hass=self.hass)
         resp_code, _resp_content = await webserver.get_device_list_bridge()

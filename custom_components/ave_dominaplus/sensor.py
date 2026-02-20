@@ -103,7 +103,9 @@ def update_th_offset(
         return
 
     _LOGGER.debug(
-        " Updating number entity for family %s, device_id %s", family, ave_device_id
+        " Updating number entity for family %s, device_id %s",
+        family,
+        ave_device_id,
     )
 
     unique_id = set_sensor_uid(server, family, ave_device_id)
@@ -114,10 +116,8 @@ def update_th_offset(
         number.update_value(offset_value)
     else:
         # Create a new switch sensor
-        entity_name = None
         entity_ave_name = None
         if name is not None and server.settings.get_entity_names:
-            entity_name = name
             entity_ave_name = name
 
         number = ThermostatOffset(
@@ -240,4 +240,5 @@ class ThermostatOffset(SensorEntity):
         """Build the name of the sensor based on its family and device ID."""
         suffix = "offset for thermostat"
         mac = self._webserver.mac_address if self._webserver else "unknown"
-        return f"{BRAND_PREFIX} {mac} {suffix} {self._ave_name or self.ave_device_id}"
+        device_name = self._ave_name or self.ave_device_id
+        return f"{BRAND_PREFIX} {mac} {suffix} {device_name}"

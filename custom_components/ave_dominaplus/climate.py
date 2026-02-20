@@ -2,14 +2,13 @@
 
 import logging
 from typing import Any
-from unittest import case
 
 from homeassistant.components.climate import (
     DEFAULT_MAX_TEMP,
-    FAN_OFF,
+    FAN_HIGH,
     FAN_LOW,
     FAN_MEDIUM,
-    FAN_HIGH,
+    FAN_OFF,
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
@@ -99,7 +98,7 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 
 def set_sensor_uid(webserver: AveWebServer, family, ave_device_id):
     """Set the unique ID for the sensor."""
-    return f"ave_{webserver.mac_address}_thermostat_{family}_{ave_device_id}"  # Unique ID for the sensor
+    return f"ave_{webserver.mac_address}_thermostat_{family}_{ave_device_id}"
 
 
 def update_thermostat(
@@ -130,7 +129,8 @@ def update_thermostat(
     else:
         if properties is None:
             _LOGGER.debug(
-                "Received update for thermostat device_id %s but properties is None; skipping",
+                "Received update for thermostat device_id %s "
+                "but properties is None; skipping",
                 ave_device_id,
             )
             return
@@ -280,8 +280,8 @@ class AveThermostat(ClimateEntity):
             else:
                 self._attr_hvac_mode = HVACMode.HEAT
         elif property_name == "offset":
+            # Offset is not directly represented in Home Assistant
             self.ave_properties.offset = value
-            pass  # Offset is not directly represented in Home Assistant's climate entity model
         elif property_name == "season":
             if value == 0:
                 self._attr_hvac_mode = HVACMode.COOL
@@ -289,7 +289,8 @@ class AveThermostat(ClimateEntity):
                 self._attr_hvac_mode = HVACMode.HEAT
             self.ave_properties.season = value
         elif property_name == "window_state":
-            pass  # Window state is not directly represented in Home Assistant's climate entity model
+            # Window state is not directly represented in Home Assistant
+            pass
 
         self.async_write_ha_state()
 
@@ -320,7 +321,7 @@ class AveThermostat(ClimateEntity):
         season = None
         season = (
             self.ave_properties.season
-            if self.ave_properties.season and self.ave_properties != ""
+            if (self.ave_properties.season and self.ave_properties != "")
             else None
         )
         if season is None:
@@ -339,7 +340,8 @@ class AveThermostat(ClimateEntity):
     async def async_set_fan_mode(self, fan_mode):
         """Set new target fan mode.
 
-        Fan mode is readonly in AVE dominaplus thermostats, so this method does nothing.
+        Fan mode is readonly in AVE dominaplus thermostats,
+        so this method does nothing.
         """
         return
 
@@ -348,7 +350,7 @@ class AveThermostat(ClimateEntity):
         season = None
         season = (
             self.ave_properties.season
-            if self.ave_properties.season and self.ave_properties != ""
+            if (self.ave_properties.season and self.ave_properties != "")
             else None
         )
         if season is None:
