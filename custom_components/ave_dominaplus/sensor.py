@@ -8,7 +8,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+)
 
 from .const import BRAND_PREFIX
 from .web_server import AveWebServer
@@ -41,15 +43,22 @@ async def async_setup_entry(
     await adopt_existing_sensors(webserver, entry)
 
 
-async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
+async def adopt_existing_sensors(
+    server: AveWebServer, entry: ConfigEntry
+) -> None:
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
         if entity_registry is None:
             return
-        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        entities = er.async_entries_for_config_entry(
+            entity_registry, entry.entry_id
+        )
         for entity in entities:
-            if not (entity.platform == "ave_dominaplus" and entity.domain == "number"):
+            if not (
+                entity.platform == "ave_dominaplus"
+                and entity.domain == "number"
+            ):
                 continue
             # Check if the sensor is already registered
             if entity.unique_id not in server.numbers:
@@ -83,7 +92,10 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 def set_sensor_uid(webserver: AveWebServer, family, ave_device_id):
     """Set the unique ID for the sensor."""
     if family == 4:
-        return f"ave_{webserver.mac_address}_thermostat_offset_{family}_{ave_device_id}"
+        return (
+            f"ave_{webserver.mac_address}_thermostat_offset_{family}_"
+            f"{ave_device_id}"
+        )
     return f"ave_{webserver.mac_address}_number_{family}_{ave_device_id}"
 
 
@@ -182,7 +194,9 @@ class ThermostatOffset(SensorEntity):
 
         if name is None:
             if webserver.settings.get_entity_names:
-                self._name = f"Thermostat offset {self._ave_name or self.ave_device_id}"
+                self._name = (
+                    f"Thermostat offset {self._ave_name or self.ave_device_id}"
+                )
             else:
                 self._name = self.build_name()
         else:

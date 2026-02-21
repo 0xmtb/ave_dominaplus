@@ -19,7 +19,9 @@ from homeassistant.const import PRECISION_TENTHS, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+)
 
 from .ave_map import AveMapCommand
 from .ave_thermostat import AveThermostatProperties
@@ -57,15 +59,22 @@ async def async_setup_entry(
         return
 
 
-async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
+async def adopt_existing_sensors(
+    server: AveWebServer, entry: ConfigEntry
+) -> None:
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
         if entity_registry is None:
             return
-        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        entities = er.async_entries_for_config_entry(
+            entity_registry, entry.entry_id
+        )
         for entity in entities:
-            if not (entity.platform == "ave_dominaplus" and entity.domain == "climate"):
+            if not (
+                entity.platform == "ave_dominaplus"
+                and entity.domain == "climate"
+            ):
                 continue
             # Check if the sensor is already registered
             if entity.unique_id not in server.thermostats:
@@ -249,7 +258,10 @@ def _update_thermostat(
         thermostat: AveThermostat = server.thermostats[unique_id]
         if properties is not None:
             thermostat.update_all_properties(properties)
-            if properties.device_name is not None and server.settings.get_entity_names:
+            if (
+                properties.device_name is not None
+                and server.settings.get_entity_names
+            ):
                 thermostat.set_ave_name(properties.device_name)
                 if not check_name_changed(server.hass, unique_id):
                     thermostat.set_name(properties.device_name)
@@ -265,7 +277,10 @@ def _update_thermostat(
             return
         # Create a new thermostat entity
         entity_name = None
-        if properties.device_name is not None and server.settings.get_entity_names:
+        if (
+            properties.device_name is not None
+            and server.settings.get_entity_names
+        ):
             entity_name = properties.device_name
 
         thermostat = AveThermostat(
@@ -423,7 +438,9 @@ class AveThermostat(ClimateEntity):
 
         self.async_write_ha_state()
 
-    def update_from_fan_level(self, fan_level: int, first_update: bool = False):
+    def update_from_fan_level(
+        self, fan_level: int, first_update: bool = False
+    ):
         """Update the thermostat properties based on the fan level."""
         if fan_level <= 0:
             self._attr_hvac_action = HVACAction.OFF
@@ -455,7 +472,7 @@ class AveThermostat(ClimateEntity):
         )
         if season is None:
             _LOGGER.error(
-                "Cannot set temperature: season is not defined for device_id %s",
+                "Cannot set temperature: season not defined for device_id %s",
                 self.ave_properties.device_id,
             )
             return
@@ -484,7 +501,7 @@ class AveThermostat(ClimateEntity):
         )
         if season is None:
             _LOGGER.error(
-                "Cannot set preset mode: season is not defined for device_id %s",
+                "Cannot set preset mode: season not defined for device_id %s",
                 self.ave_properties.device_id,
             )
             return
@@ -506,7 +523,9 @@ class AveThermostat(ClimateEntity):
             season = 1 if hvac_mode == HVACMode.HEAT else 0
             parameters = [str(self.ave_properties.device_id)]
             _mode = 1 if self._attr_preset_mode == PRESET_MANUAL else 0
-            records = [[season, _mode, int(self._attr_target_temperature * 10)]]
+            records = [
+                [season, _mode, int(self._attr_target_temperature * 10)]
+            ]
             if self._webserver:
                 await self._webserver.send_thermostat_sts(
                     parameters=parameters, records=records
@@ -554,7 +573,9 @@ class AveThermostat(ClimateEntity):
         if name is not None:
             suffix = "thermostat"
             mac = self._webserver.mac_address if self._webserver else "unknown"
-            self.ave_properties.device_name = f"{BRAND_PREFIX} {mac} {suffix} {name}"
+            self.ave_properties.device_name = (
+                f"{BRAND_PREFIX} {mac} {suffix} {name}"
+            )
 
     def set_name(self, name: str | None):
         """Set the name of the sensor."""

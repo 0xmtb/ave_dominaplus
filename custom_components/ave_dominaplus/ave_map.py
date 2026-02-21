@@ -110,7 +110,9 @@ class AveMap:
         commands: list[AveMapCommand] = []
         for area in self.areas.values():
             commands.extend(
-                command for command in area.commands if command.device_family == family
+                command
+                for command in area.commands
+                if command.device_family == family
             )
         return commands
 
@@ -120,7 +122,10 @@ class AveMap:
         """Get a specific command by its ID and device family."""
         for area in self.areas.values():
             for command in area.commands:
-                if command.command_id == command_id and command.device_family == family:
+                if (
+                    command.command_id == command_id
+                    and command.device_family == family
+                ):
                     return command
         return None
 
@@ -138,7 +143,10 @@ class AveMap:
         """Get a specific command by its device ID and family."""
         for area in self.areas.values():
             for command in area.commands:
-                if command.device_id == device_id and command.device_family == family:
+                if (
+                    command.device_id == device_id
+                    and command.device_family == family
+                ):
                     return command
         return None
 

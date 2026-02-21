@@ -53,11 +53,17 @@ class AveWebServer:
         try:
             self.settings = AveWebServerSettings()
             self.settings.host = settings_data["ip_address"]
-            self.settings.get_entity_names = settings_data["get_entities_names"]
-            self.settings.fetch_sensor_areas = settings_data["fetch_sensor_areas"]
+            self.settings.get_entity_names = settings_data[
+                "get_entities_names"
+            ]
+            self.settings.fetch_sensor_areas = settings_data[
+                "fetch_sensor_areas"
+            ]
             self.settings.fetch_sensors = settings_data["fetch_sensors"]
             self.settings.fetch_lights = settings_data["fetch_lights"]
-            self.settings.fetch_thermostats = settings_data["fetch_thermostats"]
+            self.settings.fetch_thermostats = settings_data[
+                "fetch_thermostats"
+            ]
         except KeyError as e:
             _LOGGER.error("Missing key in settings data: %s", e)
         self.mac_address = ""
@@ -118,7 +124,7 @@ class AveWebServer:
             self.async_add_number_entities = func
 
     async def set_update_th_offset(self, func) -> None:
-        """Set the method to add or update thermostat offset number entities."""
+        """Set the method to add/update thermostat offset number entities."""
         if self.update_th_offset is None:
             self.update_th_offset = func
 
@@ -136,7 +142,9 @@ class AveWebServer:
             )
             self._connected = True
             self.mac_address = await self.tryget_mac_address()
-            _LOGGER.debug("Connected to WebSocket server at %s", self.settings.host)
+            _LOGGER.debug(
+                "Connected to WebSocket server at %s", self.settings.host
+            )
         except Exception as err:  # noqa: BLE001
             _LOGGER.error("Failed to connect to WebSocket server: %s", err)
             return False
@@ -145,14 +153,19 @@ class AveWebServer:
     async def disconnect(self) -> None:
         """Disconnect from the web server."""
         self.closed = True
-        if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
+        if (
+            self._thermostat_fetch_task
+            and not self._thermostat_fetch_task.done()
+        ):
             self._thermostat_fetch_task.cancel()
             self._thermostat_fetch_task = None
         if self.ws_conn:
             await self.ws_conn.close()
             self.ws_conn = None
             self._connected = False
-            _LOGGER.info("WebSocket disconnected!", extra={"host": self.settings.host})
+            _LOGGER.info(
+                "WebSocket disconnected!", extra={"host": self.settings.host}
+            )
 
     async def start(self) -> None:
         """Start the WebSocket connection and listen for messages."""
@@ -165,10 +178,16 @@ class AveWebServer:
 
         while not self.closed:
             try:
-                if not self._connected or self.ws_conn is None or self.ws_conn.closed:
+                if (
+                    not self._connected
+                    or self.ws_conn is None
+                    or self.ws_conn.closed
+                ):
                     _LOGGER.debug("Attempting to connect to WebSocket server")
                     if not await self.authenticate():
-                        _LOGGER.error("Failed to authenticate with WebSocket server")
+                        _LOGGER.error(
+                            "Failed to authenticate with WebSocket server"
+                        )
                         await asyncio.sleep(5)
                         continue
 
@@ -179,7 +198,9 @@ class AveWebServer:
                     if msg.type == aiohttp.WSMsgType.BINARY:
                         await self.on_message(msg.data)
                     elif msg.type == aiohttp.WSMsgType.ERROR:
-                        _LOGGER.error("WebSocket error", extra={"error": msg.data})
+                        _LOGGER.error(
+                            "WebSocket error", extra={"error": msg.data}
+                        )
                         break
 
             except Exception as err:  # noqa: BLE001
@@ -208,20 +229,30 @@ class AveWebServer:
         if self.settings.fetch_thermostats:
             await self._start_thermostats_fetch_flow()
 
-        await self.send_ws_command("SU3")  # Start streaming updates (most of them)
-        # await self.send_ws_command("SU2") # Starts streaming some other updates (UPD for TLO and XU , NET and CLD messages)
+        await self.send_ws_command(
+            "SU3"
+        )  # Start streaming updates (most of them)
+
+        # Starts streaming some other updates (UPD for TLO and XU, NET and CLD)
+        # await self.send_ws_command("SU2")
 
     async def _start_thermostats_fetch_flow(self) -> None:
-        """Start thermostat bootstrap flow without blocking message handling."""
+        """Start thermostat bootstrap flow
+        without blocking message handling."""
         self.ave_map = AveMap()
         self._thermostat_lm_done.clear()
         self._thermostat_lmc_done.clear()
 
-        if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
+        if (
+            self._thermostat_fetch_task
+            and not self._thermostat_fetch_task.done()
+        ):
             self._thermostat_fetch_task.cancel()
 
         await self.send_ws_command("LM")
-        self._thermostat_fetch_task = asyncio.create_task(self._termostats_fetch_flow())
+        self._thermostat_fetch_task = asyncio.create_task(
+            self._termostats_fetch_flow()
+        )
 
     async def _termostats_fetch_flow(self):
         # 1) wait until LM responses are received and the map is loaded
@@ -234,14 +265,20 @@ class AveWebServer:
             return
 
         # 2) send LMC for each area once the LM map is loaded
-        if self.ave_map.areas_loaded and self.ws_conn and not self.ws_conn.closed:
+        if (
+            self.ave_map.areas_loaded
+            and self.ws_conn
+            and not self.ws_conn.closed
+        ):
             if not self.ave_map.areas:
                 _LOGGER.debug("LM map returned no areas")
                 return
             for map_id in self.ave_map.areas:
                 await self.send_ws_command("LMC", map_id)
         else:
-            _LOGGER.debug("Map not loaded or ws disconnected; skipping LMC send")
+            _LOGGER.debug(
+                "Map not loaded or ws disconnected; skipping LMC send"
+            )
             return
 
         # 3) wait for all LMC responses (commands loaded)
@@ -253,7 +290,9 @@ class AveWebServer:
         # 4) request thermostat status snapshots
         commands: list[AveMapCommand] = self.ave_map.GetCommandsByFamily(4)
         for thermostatCommand in commands:
-            await self.send_ws_command("WTS", [int(thermostatCommand.device_id)])
+            await self.send_ws_command(
+                "WTS", [int(thermostatCommand.device_id)]
+            )
 
     def value_to_hex(self, value):
         """Return the hexadecimal value of a number."""
@@ -275,7 +314,9 @@ class AveWebServer:
         try:
             # Ensure the message is decoded if it's in bytes
             if isinstance(message, bytes):
-                message = message.decode("utf-8")  # Decode bytes to string using UTF-8
+                message = message.decode(
+                    "utf-8"
+                )  # Decode bytes to string using UTF-8
             # log_with_timestamp(message)
             messages = message.split(chr(0x04))
             for msg in messages:
@@ -319,13 +360,16 @@ class AveWebServer:
         full_message = message + crc + chr(0x04)
         if self.ws_conn and not self.ws_conn.closed:
             await self.ws_conn.send_str(full_message)
-            escaped_message = full_message.encode("unicode_escape").decode("ascii")
-            escaped_message = full_message.encode("unicode_escape").decode("ascii")
+            escaped_message = full_message.encode("unicode_escape").decode(
+                "ascii"
+            )
             _LOGGER.debug("Sent command: %s", escaped_message)
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def manage_incoming_messages_messages(self, command, parameters, records):
+    async def manage_incoming_messages_messages(
+        self, command, parameters, records
+    ):
         """Manage commands received from the web server."""
         if command == "pong":
             pass
@@ -370,7 +414,9 @@ class AveWebServer:
     def manage_upd(self, parameters, records):
         """Manage UPD commands received from the web server."""
         # _LOGGER.debug(
-        #     "Received UPD command. Parameters: %s Records: %s", parameters, records
+        #     "Received UPD command. Parameters: %s Records: %s",
+        #     parameters,
+        #     records,
         # )
         if parameters[0] == "WS":
             device_type, device_id, device_status = (
@@ -382,16 +428,30 @@ class AveWebServer:
                 # Devices with ID > 2000000 must be scenarios or something...
                 pass
             elif device_type == 1 and self.settings.fetch_lights:
-                self.update_switch(self, device_type, device_id, device_status, None)
-            # if device_type in [12, 13]:
-            #     log_with_timestamp(f"Received async Antitheft status update. Device ID: {device_id}, Device Type: {device_type}, Status: {device_status}")
+                self.update_switch(
+                    self, device_type, device_id, device_status, None
+                )
+            # elif device_type in [12, 13]:
+            #     _LOGGER.debug(
+            #         "Received async Antitheft status update. "
+            #         "Device ID: %s, Device Type: %s, Status: %s",
+            #         device_id,
+            #         device_type,
+            #         device_status,
+            #     )
             # else:
-            #     if device_type in [1, 2, 22, 9, 3, 16, 19, 6]:  # Limited to [Lighting / Energy / Shutters / Scenarios] for security reasons ---
+            # if device_type in [1, 2, 22, 9, 3, 16, 19, 6]:
+            #     """Limited to [Lighting / Energy / Shutters / Scenarios]
+            #     for security reasons"""
+            #     pass
         elif parameters[0] == "X" and parameters[1] == "A":  # ANTITHEFT AREA
             if not self.settings.fetch_sensor_areas:
                 return
 
-            # parameters[2] is the area ID. all other parameters are == 0 when triggered, parameters[6] == 1 when cleared
+            """parameters[2] is the area ID.
+            all other parameters are == 0 when triggered,
+            parameters[6] == 1 when cleared"""
+
             area_progressive = int(parameters[2])
             # area_engaged = int(parameters[3])
             # area_in_alarm = int(parameters[5])
@@ -400,7 +460,10 @@ class AveWebServer:
             if area_clear > 0:
                 status = 0
             self.update_binary_sensor(self, 12, area_progressive, status)
-            # (f"{ANTITHEFT_PREFIX} XA - areaID: {area_progressive} - engaged: {area_engaged} - clear: {area_clear} - alarm: {area_in_alarm}")
+            # f"XA - areaID: {area_progressive}
+            # - engaged: {area_engaged}
+            # - clear: {area_clear}
+            # - alarm: {area_in_alarm}")
         elif parameters[0] == "X" and parameters[1] == "S":  # ANTITHEFT SENSOR
             if not self.settings.fetch_sensors:
                 return
@@ -409,9 +472,11 @@ class AveWebServer:
             )
         elif parameters[0] == "X" and parameters[1] == "U":
             # ANTITHEFT UNIT (requires SU2)
-            _LOGGER.debug("XU Antitheft Unit - engaged", extra={"id": parameters[2]})
+            _LOGGER.debug(
+                "XU Antitheft Unit - engaged", extra={"id": parameters[2]}
+            )
         elif parameters[0] == "WT":
-            # A variety of updates for thermostats, with Device ID as identifier
+            # Serveral updates for thermostats, using Device ID as identifier
             if parameters[1] == "O":
                 self.update_thermostat(
                     server=self,
@@ -451,13 +516,15 @@ class AveWebServer:
                 or not self.ave_map.command_loaded
             ):
                 _LOGGER.debug(
-                    "Received thermostat update before map/commands loaded; skipping"
+                    "Received th update before map/commands loaded; skipping"
                 )
                 return
-            _command = self.ave_map.GetCommandByIdAndFamily(int(parameters[1]), 4)
+            _command = self.ave_map.GetCommandByIdAndFamily(
+                int(parameters[1]), 4
+            )
             if not _command:
                 _LOGGER.debug(
-                    "Received thermostat update for unknown command ID %s; skipping",
+                    "Received th update for unknown command ID %s; skipping",
                     parameters[1],
                 )
                 return
@@ -473,16 +540,16 @@ class AveWebServer:
             # Reload gui
             pass
         else:
-            _LOGGER.warning(
-                "Not yet handled UPD %s",
+            _LOGGER.debug(
+                "Received not yet handled UPD %s",
                 parameters[0],
                 extra={"parameters": parameters},
             )
 
     def manage_gsf(self, parameters, records):
-        """Manage GSF Get Status by Family commands received from the web server."""
-        _LOGGER.info(
-            "Received GSF (Get status by family) command for family %s",
+        """Manage GSF Get Status by Family responses."""
+        _LOGGER.debug(
+            "Received GSF (Get status by family) response for family %s",
             parameters[0],
             extra={"parameters": parameters, "records": records},
         )
@@ -501,7 +568,7 @@ class AveWebServer:
 
     def manage_ldi(self, parameters, records):
         """Manage LDI List Devices commands received from the web server."""
-        _LOGGER.info(
+        _LOGGER.debug(
             "Parsing LDI (List Devices) command",
             extra={"parameters": parameters, "records": records},
         )
@@ -521,7 +588,7 @@ class AveWebServer:
                 self.update_switch(self, 1, device_id, -1, device_name)
                 # Light
             elif device_type == 4:
-                # Thermostat
+                # Thermostat, retrieved with their dedicated bootstrap sequence
                 pass
             elif device_type == 6:
                 # Scenario
@@ -548,9 +615,9 @@ class AveWebServer:
         self._thermostat_lm_done.set()
 
     def manage_lmc(self, parameters, records):
-        """Manage LMC List Map Commands commands received from the web server."""
+        """Manage LMC List Map Commands responses."""
         _LOGGER.debug(
-            "Parsing LMC (List Map Commands) command, parameters: %s | records: %s",
+            "Parsing LMC response, parameters: %s | records: %s",
             parameters,
             records,
         )
@@ -560,13 +627,15 @@ class AveWebServer:
             self._thermostat_lmc_done.set()
 
     def manage_wts(self, parameters, records):
-        """Manage WTS command responses received from the web server."""
+        """Manage WTS command responses"""
         _LOGGER.debug(
             "Parsing WTS response",
             extra={"parameters": parameters, "records": records},
         )
         device_id = int(parameters[0])
-        thermostatProperties = AveThermostatProperties.from_wts(parameters, records)
+        thermostatProperties = AveThermostatProperties.from_wts(
+            parameters, records
+        )
         thermostatProperties.device_name = (
             f"thermostat_{thermostatProperties.device_name}"
         )
@@ -637,14 +706,16 @@ class AveWebServer:
                         data = await response.text()
                         _LOGGER.debug("Bridge response: %s", data)
                         return response.status, data
-                    _LOGGER.error("Failed to call bridge. Status: %s", response.status)
+                    _LOGGER.error(
+                        "Failed to call bridge. Status: %s", response.status
+                    )
                     return response.status, None
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Error calling bridge: %s", err)
                 return 900, None
 
     async def tryget_mac_address(self) -> str | None:
-        """Try to get the MAC address of the web server using the revealcode.php bridge."""
+        """Try to get the MAC address of the webserver"""
         async with aiohttp.ClientSession() as session:
             try:
                 url = f"http://{self.settings.host}/revealcode.php"

@@ -11,7 +11,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+)
 from homeassistant.util.dt import utcnow
 
 from .const import BRAND_PREFIX
@@ -44,13 +46,17 @@ async def async_setup_entry(
     async_add_entities([status_sensor])
 
 
-async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
+async def adopt_existing_sensors(
+    server: AveWebServer, entry: ConfigEntry
+) -> None:
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
         if entity_registry is None:
             return
-        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        entities = er.async_entries_for_config_entry(
+            entity_registry, entry.entry_id
+        )
         for entity in entities:
             if not (
                 entity.platform == "ave_dominaplus"
@@ -154,7 +160,8 @@ def update_binary_sensor(
 
         _LOGGER.info("Creating new binary sensor entity %s", sensor.name)
         server.binary_sensors[unique_id] = sensor
-        server.async_add_bs_entities([sensor])  # Add the new sensor to Home Assistant
+        # Add the new sensor to Home Assistant
+        server.async_add_bs_entities([sensor])
 
 
 def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:

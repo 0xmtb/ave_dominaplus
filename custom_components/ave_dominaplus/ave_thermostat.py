@@ -22,7 +22,7 @@ class AveThermostatProperties:
     @staticmethod
     def from_wts(
         parameters: list[str], records: list[list[str]]
-    ) -> "AveThermostatProperties":  # noqa: UP037 removing quotes breaks HA's loading of the integration
+    ) -> "AveThermostatProperties":  # noqa: UP037 removing quotes breaks HA
         """Create thermostat properties from WTS data.
 
         Args:
@@ -49,16 +49,22 @@ class AveThermostatProperties:
         props.fan_level = get_record_value(1)
         props.configuration = get_record_value(2)
         props.offset = (
-            int(get_record_value(3)) / 10 if get_record_value(3) is not None else None
+            int(get_record_value(3)) / 10
+            if get_record_value(3) is not None
+            else None
         )
         props.season = get_record_value(4)
         props.temperature = (
-            int(get_record_value(5)) / 10 if get_record_value(5) is not None else None
+            int(get_record_value(5)) / 10
+            if get_record_value(5) is not None
+            else None
         )
         mode_record = get_record_value(8)
         props.mode = "1F" if int(mode_record) == 1 else get_record_value(6)
         props.set_point = (
-            int(get_record_value(7)) / 10 if get_record_value(7) is not None else None
+            int(get_record_value(7)) / 10
+            if get_record_value(7) is not None
+            else None
         )
         props.forced_mode = get_record_value(8)
         props.local_off = get_record_value(9)

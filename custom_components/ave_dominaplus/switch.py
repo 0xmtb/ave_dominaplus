@@ -8,7 +8,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+)
 
 from .const import BRAND_PREFIX
 from .web_server import AveWebServer
@@ -41,15 +43,22 @@ async def async_setup_entry(
     await adopt_existing_sensors(webserver, entry)
 
 
-async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> None:
+async def adopt_existing_sensors(
+    server: AveWebServer, entry: ConfigEntry
+) -> None:
     """Adopt existing sensors from the entity registry."""
     try:
         entity_registry = er.async_get(server.hass)
         if entity_registry is None:
             return
-        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        entities = er.async_entries_for_config_entry(
+            entity_registry, entry.entry_id
+        )
         for entity in entities:
-            if not (entity.platform == "ave_dominaplus" and entity.domain == "switch"):
+            if not (
+                entity.platform == "ave_dominaplus"
+                and entity.domain == "switch"
+            ):
                 continue
             # Check if the sensor is already registered
             if entity.unique_id not in server.switches:
@@ -81,7 +90,8 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 
 def set_sensor_uid(webserver: AveWebServer, family, ave_device_id):
     """Set the unique ID for the sensor."""
-    # TODO: This will ready up for multi-hub configurations but break existing installations
+    # TODO: This will ready up for multi-hub configurations
+    # but may break existing installations
     # return f"ave_{webserver.mac_address}_switch_{family}_{ave_device_id}"
     return f"ave_switch_{family}_{ave_device_id}"
 
@@ -101,7 +111,9 @@ def update_switch(
         )
         return
 
-    _LOGGER.debug(" Updating switch for family %s, device_id %s", family, ave_device_id)
+    _LOGGER.debug(
+        " Updating switch for family %s, device_id %s", family, ave_device_id
+    )
 
     unique_id = set_sensor_uid(server, family, ave_device_id)
     already_exists = unique_id in server.switches
@@ -134,7 +146,9 @@ def update_switch(
 
         _LOGGER.info("Creating new switch entity %s", name)
         server.switches[unique_id] = switch
-        server.async_add_sw_entities([switch])  # Add the new sensor to Home Assistant
+        server.async_add_sw_entities(
+            [switch]
+        )  # Add the new sensor to Home Assistant
 
 
 def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
@@ -229,7 +243,9 @@ class LightSwitch(SwitchEntity):
             return
         if is_on < 0:
             return
-        self._attr_is_on = bool(is_on)  # Set the state to True (on) or False (off)
+        self._attr_is_on = bool(
+            is_on
+        )  # Set the state to True (on) or False (off)
         self.async_write_ha_state()
 
     def set_name(self, name: str | None):
