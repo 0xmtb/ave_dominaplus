@@ -176,3 +176,24 @@ cython_debug/
 
 #Home assistant core files not needed for custom compoknents
 quality_scale.yaml
+
+
+# artifacts
+__pycache__
+.pytest*
+*.egg-info
+*/build/*
+*/dist/*
+
+
+# misc
+.coverage
+.vscode/*
+!.vscode/launch.json
+coverage.xml
+.ruff_cache
+
+
+# Home Assistant configuration
+config/*
+!config/configuration.yaml

@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import (
-    AddConfigEntryEntitiesCallback,
+    AddEntitiesCallback,
 )
 
 from .const import BRAND_PREFIX
@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant | None,
     entry: ConfigEntry,
-    async_add_entities: AddConfigEntryEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up AVE dominaplus number entities.
 
