@@ -7,10 +7,9 @@ Control your AVE Dominaplus home automation system directly from Home Assistant!
 ## 📋 Requirements
 
 - An **AVE webserver device** installed and accessible from your Home Assistant instance.
-- **Alarm units** connected to the webserver (required for motion sensors and alarm zones).
 - Only tested with the **"autologin" setting** enabled in the webserver.
 - **AVE Cloud configuration is NOT required**.
-
+- **Alarm units** connected to the webserver (required for motion sensors and alarm zones).
 ---
 
 ## 🚀 Installation
@@ -68,9 +67,10 @@ Control your AVE Dominaplus home automation system directly from Home Assistant!
   by the device.
 
 #### Naming
-Entity names are obtained from the webserver when the
+- Entity names are obtained from the webserver when the
 "Get entities names from webserver" option is enabled.  Otherwise
 generated names based on family and device ID are used.
+
 ---
 
 ## 🔜 Not yet supported (contributors welcome!)
@@ -105,6 +105,16 @@ The integration tries its best to not override your custom names. But for better
 
 ---
 
+## ❓ Frequently asked questions
+
+### I don’t see certain device types after installation
+First verify the device type is listed under “Supported Devices” above. If
+it is supported and still not visible, reconfigure the integration in Home
+Assistant (Settings → Devices & Services → your AVE entry → ⋮ menu →
+Reconfigure).  Items added in a newer version may not appear until the entry
+has been re‑configured.
+
+
 ## ⚠️ Known Issues
 
 ### Multiple Webservers for Different Plants
@@ -116,6 +126,28 @@ The integration tries its best to not override your custom names. But for better
 - After a webserver or alarm unit reboot, a brief arm/disarm cycle may be needed for sensors to
    start reporting state updates. This behavior is due to the alarm system firmware, not the
    integration.
+
+
+## 🆘 How to ask for help
+
+Before opening an issue:
+
+* Make sure the integration is up to date.
+* Check the **FAQ** and **Known Issues** sections above; your question may already be answered.
+
+When creating a GitHub issue:
+
+* Search for an existing issue describing the same problem and add additional information there instead
+  of opening a duplicate.
+* Do **not** post on unrelated issues; off-topic comments may be removed.
+* Provide as much relevant information as you can:
+  - integration version,
+  - Home Assistant version,
+  - webserver firmware version,
+  - model of the affected device(s),
+  - log output with the `ave_dominaplus` domain set to `debug` (capture the messages
+    emitted when the integration starts).
+
 
 ---
 
