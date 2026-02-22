@@ -34,6 +34,10 @@
           "get_entities_names": "Usa nomi e identificativi entità configurati nel sistema Domina Plus.",
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità."
         }
+      },
+      "zeroconf_confirm": {
+        "title": "Webserver AVE rilevato",
+        "description": "Host: {ip_address}\\nMAC: {mac_address}\\n\\nConferma per aggiungere questa integrazione."
       }
     },
     "error": {
@@ -42,7 +46,10 @@
       "unknown": "Errore sconosciuto"
     },
     "abort": {
-      "already_configured": "Dispositivo già configurato"
+      "already_configured": "Dispositivo già configurato",
+      "cannot_connect": "Connessione non riuscita",
+      "not_ave_webserver": "Il dispositivo scoperto non è un webserver AVE",
+      "unknown": "Errore sconosciuto"
     }
   }
 }

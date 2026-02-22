@@ -40,6 +40,10 @@
           "get_entities_names": "Will use the entities names and IDs as set in the Domina Plus system.",
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems."
         }
+      },
+      "zeroconf_confirm": {
+        "title": "Discovered AVE webserver",
+        "description": "Host: {ip_address}\\nMAC: {mac_address}\\n\\nConfirm to add this integration."
       }
     },
     "error": {
@@ -48,7 +52,10 @@
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "not_ave_webserver": "Discovered device is not an AVE webserver",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
     }
   }
 }

@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import DOMAIN
 from .web_server import AveWebServer
@@ -34,6 +35,10 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for AVE ws."""
 
     VERSION = 1
+
+    _discovered_user_input: dict[str, Any] | None = None
+    _discovered_title: str | None = None
+    _discovered_mac: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -60,6 +65,73 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle zeroconf discovery."""
+        discovered_host = discovery_info.host
+        for ip_addr in discovery_info.ip_addresses:
+            if ip_addr.version == 4:
+                discovered_host = str(ip_addr)
+                break
+
+        user_input = {
+            CONF_IP_ADDRESS: discovered_host,
+            "get_entities_names": True,
+            "fetch_sensor_areas": True,
+            "fetch_sensors": True,
+            "fetch_lights": True,
+            "fetch_thermostats": True,
+        }
+        self._async_abort_entries_match(
+            {CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS]}
+        )
+
+        try:
+            info = await self.validate_input(user_input, require_mac_address=True)
+        except CannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except MacAddressNotFound:
+            return self.async_abort(reason="not_ave_webserver")
+        except Exception:
+            _LOGGER.exception("Unexpected exception")
+            return self.async_abort(reason="unknown")
+
+        self._abort_if_unique_id_configured(
+            updates={CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS]}
+        )
+        self._discovered_user_input = user_input
+        self._discovered_title = info["title"]
+        self._discovered_mac = info["mac_address"]
+
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm discovered AVE webserver before creating the entry."""
+        if (
+            self._discovered_user_input is None
+            or self._discovered_title is None
+            or self._discovered_mac is None
+        ):
+            return self.async_abort(reason="unknown")
+
+        if user_input is not None:
+            return self.async_create_entry(
+                title=self._discovered_title,
+                data=self._discovered_user_input,
+            )
+
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "ip_address": self._discovered_user_input[CONF_IP_ADDRESS],
+                "mac_address": self._discovered_mac,
+            },
         )
 
     async def async_step_reconfigure(
@@ -91,7 +163,9 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def validate_input(self, data: dict[str, Any]) -> dict[str, Any]:
+    async def validate_input(
+        self, data: dict[str, Any], require_mac_address: bool = False
+    ) -> dict[str, Any]:
         """Validate the user input allows us to connect.
 
         Data has the keys from STEP_USER_DATA_SCHEMA
@@ -106,7 +180,12 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
             raise CannotConnect
 
         mac_address: str = await self._configure_unique_id(webserver)
-        return {"title": f"AVE webserver {mac_address}"}
+        if require_mac_address and not mac_address:
+            raise MacAddressNotFound
+        return {
+            "title": f"AVE webserver {mac_address}",
+            "mac_address": mac_address,
+        }
 
     async def _configure_unique_id(self, webserver: AveWebServer) -> str:
         mac_address: str | None = await webserver.tryget_mac_address()
@@ -124,3 +203,7 @@ class CannotConnect(HomeAssistantError):
 
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
+
+
+class MacAddressNotFound(HomeAssistantError):
+    """Error to indicate discovered host is not an AVE webserver."""
