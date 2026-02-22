@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
-import xml.etree.ElementTree as ET
 
 import aiohttp
+from defusedxml import ElementTree as DefusedET
 
 from .ave_map import AveMap, AveMapCommand
 from .ave_thermostat import AveThermostatProperties
@@ -685,11 +685,11 @@ class AveWebServer:
                         # _LOGGER.debug("revealcode response: %s", data)
 
                         try:
-                            root = ET.fromstring(data)
+                            root = DefusedET.fromstring(data)
                             xml_mac = root.findtext("macaddress")
                             if xml_mac:
                                 return xml_mac.strip().lower()
-                        except ET.ParseError:
+                        except DefusedET.ParseError:
                             _LOGGER.exception("Invalid XML in revealcode response")
                         _LOGGER.warning(
                             "No macaddress tag found in revealcode response"
