@@ -50,7 +50,7 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
             return
         entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
         for entity in entities:
-            if not (entity.platform == "ave_dominaplus" and entity.domain == "number"):
+            if not (entity.platform == "ave_dominaplus" and entity.domain == "sensor"):
                 continue
             # Check if the sensor is already registered
             if entity.unique_id not in server.numbers:
@@ -67,15 +67,19 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
                     unique_id=entity.unique_id,
                     family=family,
                     ave_device_id=ave_device_id,
-                    name=name,
                     webserver=server,
+                    name=name,
                     value=None,
                 )
-                sensor.hass = server.hass
                 sensor.entity_id = entity.entity_id
 
                 server.numbers[entity.unique_id] = sensor
                 server.async_add_number_entities([sensor])
+                _LOGGER.info(
+                    "Adopted existing number entity with name %s with unique_id %s",
+                    sensor.name,
+                    sensor.unique_id,
+                )
     except Exception:
         _LOGGER.exception("Error adopting existing sensors")
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
@@ -168,8 +172,8 @@ class ThermostatOffset(SensorEntity):
         unique_id: str,
         family: int,
         ave_device_id: int,
+        webserver: AveWebServer,
         name=None,
-        webserver: AveWebServer | None = None,
         ave_name: str | None = None,
         value: float | None = None,
     ) -> None:

@@ -76,7 +76,7 @@ class AveWebServer:
         self.switches: dict = {}  # Track switches by unique ID
         self.async_add_sw_entities: Any = None
         self.update_switch: Any = None
-        self.thermostats: dict[Any] = {}  # Track thermostats by ID
+        self.thermostats: dict = {}  # Track thermostats by ID
         self.async_add_th_entities: Any = None
         self.update_thermostat: Any = None
         self.ave_map: AveMap = AveMap()
@@ -601,13 +601,14 @@ class AveWebServer:
             properties=thermostat_properties,
             ave_device_id=device_id,
         )
-        self.update_th_offset(
-            server=self,
-            family=4,
-            ave_device_id=device_id,
-            offset_value=thermostat_properties.offset,
-            name=thermostat_properties.device_name,
-        )
+        if thermostat_properties.offset is not None:
+            self.update_th_offset(
+                server=self,
+                family=4,
+                ave_device_id=device_id,
+                offset_value=thermostat_properties.offset,
+                name=thermostat_properties.device_name,
+            )
 
     async def switch_turn_on(self, device_id: int) -> None:
         """Turn on the switch."""

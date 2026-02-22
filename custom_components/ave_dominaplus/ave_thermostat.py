@@ -11,7 +11,7 @@ class AveThermostatProperties:
         self.device_response: str = ""
         self.fan_level: int = -1
         self.configuration: str = ""
-        self.offset: float = 0.0
+        self.offset: float | None = None
         self.season: int = -1
         self.temperature: float = 0.0
         self.mode: str = ""
@@ -39,28 +39,29 @@ class AveThermostatProperties:
                 return records[0][index]
             return None
 
+        if parameters is None or len(parameters) == 0:
+            raise ValueError("Parameters list is empty or None")
+        if not parameters[0].isdigit():
+            raise ValueError("First parameter must be a valid device ID")
+
         props = AveThermostatProperties()
-        props.device_id = (
-            int(parameters[0])
-            if len(parameters) > 0 and str(parameters[0]).isdigit()
-            else None
-        )
-        props.device_name = parameters[0] if len(parameters) > 0 else None
-        props.device_response = get_record_value(0)
-        props.fan_level = get_record_value(1)
-        props.configuration = get_record_value(2)
-        props.offset = (
-            int(get_record_value(3)) / 10 if get_record_value(3) is not None else None
-        )
-        props.season = get_record_value(4)
-        props.temperature = (
-            int(get_record_value(5)) / 10 if get_record_value(5) is not None else None
-        )
-        mode_record = get_record_value(8)
-        props.mode = "1F" if int(mode_record) == 1 else get_record_value(6)
-        props.set_point = (
-            int(get_record_value(7)) / 10 if get_record_value(7) is not None else None
-        )
-        props.forced_mode = get_record_value(8)
-        props.local_off = get_record_value(9)
+        props.device_id = int(parameters[0])
+        props.device_name = parameters[0] if len(parameters) > 0 else ""
+        props.device_response = get_record_value(0) or ""
+        fan_level_str = get_record_value(1)
+        props.fan_level = int(fan_level_str) if fan_level_str is not None else -1
+        props.configuration = get_record_value(2) or ""
+        offset_str = get_record_value(3)
+        props.offset = int(offset_str) / 10 if offset_str is not None else None
+        season_str = get_record_value(4)
+        props.season = int(season_str) if season_str is not None else -1
+        temperature_str = get_record_value(5)
+        props.temperature = int(temperature_str) / 10 if temperature_str is not None else 0.0
+        forced_mode_record = get_record_value(8) or "0"
+        props.mode = "1F" if int(forced_mode_record) == 1 else (get_record_value(6) or "")
+        set_point_str = get_record_value(7)
+        props.set_point = int(set_point_str) / 10 if set_point_str is not None else None
+        forced_mode_str = get_record_value(8)
+        props.forced_mode = int(forced_mode_str) if forced_mode_str is not None else 0
+        props.local_off = get_record_value(9) or ""
         return props

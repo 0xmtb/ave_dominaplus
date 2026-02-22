@@ -1,6 +1,7 @@
 """Climate sensor platform for AVE dominaplus integration."""
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.climate import DEFAULT_MAX_TEMP, ClimateEntity
@@ -92,6 +93,10 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 
                 server.thermostats[entity.unique_id] = thermostat
                 server.async_add_th_entities([thermostat])
+                _LOGGER.info("Adopted existing thermostat entity with name %s with unique_id %s",
+                    thermostat.name,
+                    thermostat.unique_id,
+                )
     except Exception:
         _LOGGER.exception("Error adopting existing sensors")
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
@@ -239,13 +244,14 @@ def _update_thermostat(
     property_value: Any = None,
 )-> None:
     """Create or update thermostat based on incoming data from webserver."""
-    _LOGGER.debug(" Updating thermostat device_id %s", ave_device_id)
 
     unique_id = set_sensor_uid(server, family, ave_device_id)
     already_exists = unique_id in server.thermostats
     if already_exists:
         # Update the existing sensor's state
         thermostat: AveThermostat = server.thermostats[unique_id]
+        _LOGGER.debug(" Updating thermostat %s device_id %s", thermostat.name, ave_device_id)
+
         if properties is not None:
             thermostat.update_all_properties(properties)
             if properties.device_name is not None and server.settings.get_entity_names:
@@ -264,7 +270,12 @@ def _update_thermostat(
             return
         # Create a new thermostat entity
         entity_name = None
-        if properties.device_name is not None and server.settings.get_entity_names:
+        if server.settings.get_entity_names:
+            if properties.device_name is None:
+                _LOGGER.debug("Cannot create thermostat entity for device_id %s because device_name is None and get_entity_names is enabled. Waiting for discovery message",
+                    ave_device_id,
+                )
+                return
             entity_name = properties.device_name
 
         thermostat = AveThermostat(
@@ -327,7 +338,7 @@ class AveThermostat(ClimateEntity):
         unique_id: str,
         family: int,
         ave_properties: AveThermostatProperties,
-        webserver: AveWebServer | None = None,
+        webserver: AveWebServer,
         name: str | None = None,
     ) -> None:
         """Initialize the thermostat sensor."""
@@ -337,13 +348,14 @@ class AveThermostat(ClimateEntity):
         self._webserver = webserver
         self.hass = self._webserver.hass
         self.ave_properties: AveThermostatProperties = ave_properties
-
+        self.ave_name = ""
         if name is not None:
             self._name = name
         elif ave_properties.device_name is None:
             self._name = self.build_name()
         else:
             self._name = ave_properties.device_name
+            self.ave_name = ave_properties.device_name
 
         self._selected_schedule = None
         self.update_all_properties(ave_properties, first_update=True)
@@ -458,8 +470,15 @@ class AveThermostat(ClimateEntity):
                 self.ave_properties.device_id,
             )
             return
+        temperature = kwargs.get("temperature")
+        if temperature is None:
+            _LOGGER.error(
+                "Cannot set temperature: temperature not provided for device_id %s",
+                self.ave_properties.device_id,
+            )
+            return
         parameters = [str(self.ave_properties.device_id)]
-        records = [[season, 1, int(kwargs.get("temperature") * 10)]]
+        records = [[season, 1, int(temperature * 10)]]
         if self._webserver:
             await self._webserver.send_thermostat_sts(
                 parameters=parameters, records=records
@@ -487,6 +506,12 @@ class AveThermostat(ClimateEntity):
                 self.ave_properties.device_id,
             )
             return
+        if self._attr_target_temperature is None:
+            _LOGGER.error(
+                "Cannot set preset mode: target temperature not defined for device_id %s",
+                self.ave_properties.device_id,
+            )
+            return
         parameters = [str(self.ave_properties.device_id)]
         _mode = 1 if preset_mode == PRESET_MANUAL else 0
         records = [[season, _mode, int(self._attr_target_temperature * 10)]]
@@ -502,6 +527,12 @@ class AveThermostat(ClimateEntity):
                 device_id=self.ave_properties.device_id, on_off=0
             )
         elif hvac_mode in {HVACMode.HEAT, HVACMode.COOL}:
+            if self._attr_target_temperature is None:
+                _LOGGER.error(
+                    "Cannot set hvac mode: target temperature not defined for device_id %s",
+                    self.ave_properties.device_id,
+                )
+                return
             season = 1 if hvac_mode == HVACMode.HEAT else 0
             parameters = [str(self.ave_properties.device_id)]
             _mode = 1 if self._attr_preset_mode == PRESET_MANUAL else 0
@@ -551,9 +582,7 @@ class AveThermostat(ClimateEntity):
     def set_ave_name(self, name: str | None) -> None:
         """Set the AVE name of the sensor."""
         if name is not None:
-            suffix = "thermostat"
-            mac = self._webserver.mac_address if self._webserver else "unknown"
-            self.ave_properties.device_name = f"{BRAND_PREFIX} {mac} {suffix} {name}"
+            self.ave_name = name
 
     def set_name(self, name: str | None) -> None:
         """Set the name of the sensor."""

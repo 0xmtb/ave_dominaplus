@@ -68,13 +68,18 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
                     family=family,
                     ave_device_id=ave_device_id,
                     is_on=None,
+                    webserver=server,
                     name=name,
                 )
-                sensor.hass = server.hass
                 sensor.entity_id = entity.entity_id
 
                 server.switches[entity.unique_id] = sensor
                 server.async_add_sw_entities([sensor])
+                _LOGGER.info(
+                    "Adopted existing switch entity with name %s with unique_id %s",
+                    sensor.name,
+                    sensor.unique_id,
+                )
     except Exception:
         _LOGGER.exception("Error adopting existing sensors")
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
@@ -134,7 +139,7 @@ def update_switch(
             ave_name=entity_ave_name,
         )
 
-        _LOGGER.info("Creating new switch entity %s", name)
+        _LOGGER.info("Creating new switch entity %s, unique_id %s", name, unique_id)
         server.switches[unique_id] = switch
         server.async_add_sw_entities([switch])  # Add the new sensor to Home Assistant
 
@@ -165,8 +170,8 @@ class LightSwitch(SwitchEntity):
         family: int,
         ave_device_id: int,
         is_on: int | None,
+        webserver: AveWebServer,
         name=None,
-        webserver: AveWebServer | None = None,
         ave_name: str | None = None,
     ) -> None:
         """Initialize the motion detection sensor."""

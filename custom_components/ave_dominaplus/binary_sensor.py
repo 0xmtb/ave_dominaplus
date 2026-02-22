@@ -85,6 +85,11 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
 
                 server.binary_sensors[entity.unique_id] = sensor
                 server.async_add_bs_entities([sensor])
+                _LOGGER.info(
+                    "Adopted existing binary sensor entity with name %s with unique_id %s",
+                    sensor.name,
+                    sensor.unique_id,
+                )
     except Exception:
         _LOGGER.exception("Error adopting existing sensors")
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
@@ -204,7 +209,7 @@ class MotionBinarySensor(BinarySensorEntity):
         family: int,
         ave_device_id: int,
         is_motion_detected: int | None,
-        hass: HomeAssistant | None = None,
+        hass: HomeAssistant,
         name=None,
         ave_name=None,
     ) -> None:
