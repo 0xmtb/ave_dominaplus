@@ -41,6 +41,8 @@ This guide explains how to run and debug this integration from VS Code on Window
 
 This starts Home Assistant using the local `config/` folder. The custom integration in this repository is already available in the running setup, so you can debug it directly from breakpoints in `custom_components/ave_dominaplus/`.
 
+The Home Assistant UI is available at `http://localhost:18125`.
+
 ## Zeroconf autodiscovery debugging
 
 For mDNS/Zeroconf debugging from Windows + WSL, use the alternate devcontainer file `_zeroconf_.devcontainer.json`.
