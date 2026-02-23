@@ -1,12 +1,15 @@
 {
     "name": "emmeoerre/ave_dominaplus",
     "image": "mcr.microsoft.com/devcontainers/python:3.13",
+    "runArgs": [
+        "--network=host"
+    ],
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [
-        18124
+        18125
     ],
     "portsAttributes": {
-        "18124": {
+        "18125": {
             "label": "Home Assistant",
             "onAutoForward": "notify"
         }
