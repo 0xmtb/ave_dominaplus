@@ -164,6 +164,8 @@ def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
 class LightSwitch(SwitchEntity):
     """Representation of a light switch."""
 
+    _attr_should_poll = False
+
     def __init__(
         self,
         unique_id: str,

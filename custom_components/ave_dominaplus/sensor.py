@@ -162,6 +162,8 @@ def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
 class ThermostatOffset(SensorEntity):
     """Representation of a thermostat offset."""
 
+    _attr_should_poll = False
+
     _attr_native_max_value = 5.0
     _attr_native_min_value = -5.0
     _attr_native_step = 0.1

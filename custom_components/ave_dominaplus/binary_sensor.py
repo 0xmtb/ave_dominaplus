@@ -218,6 +218,8 @@ class AveHubStatusBinarySensor(BinarySensorEntity):
 class MotionBinarySensor(BinarySensorEntity):
     """Representation of a motion detection binary sensor."""
 
+    _attr_should_poll = False
+
     def __init__(
         self,
         unique_id: str,
