@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from defusedxml import ElementTree as DefusedET
 
-from .ave_map import AveMap, AveMapCommand
+from .ave_map import AveMap
 from .ave_thermostat import AveThermostatProperties
 from .const import (
     AVE_FAMILY_ANTITHEFT,
@@ -87,11 +87,14 @@ class AveWebServer:
         self.async_add_sw_entities: Any = None
         self.update_switch: Any = None
         self.thermostats: dict = {}  # Track thermostats by ID
+        self.all_thermostats_raw: dict = {}  # Track thermostats that are not on the map by device ID
         self.async_add_th_entities: Any = None
         self.update_thermostat: Any = None
         self.ave_map: AveMap = AveMap()
+        self._ldi_done = asyncio.Event()
         self._thermostat_lm_done = asyncio.Event()
         self._thermostat_lmc_done = asyncio.Event()
+        self._connect_actions_task: asyncio.Task | None = None
         self._thermostat_fetch_task: asyncio.Task | None = None
         self.numbers: dict = {}  # Track number entities by unique ID
         self.async_add_number_entities: Any = None
@@ -157,6 +160,9 @@ class AveWebServer:
     async def disconnect(self) -> None:
         """Disconnect from the web server."""
         self.closed = True
+        if self._connect_actions_task and not self._connect_actions_task.done():
+            self._connect_actions_task.cancel()
+            self._connect_actions_task = None
         if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
             self._thermostat_fetch_task.cancel()
             self._thermostat_fetch_task = None
@@ -185,7 +191,9 @@ class AveWebServer:
                         continue
 
                 if self.started:
-                    await self.on_connect_actions()
+                    self._connect_actions_task = asyncio.create_task(
+                        self.on_connect_actions()
+                    )
 
                 async for msg in self.ws_conn:
                     if msg.type == aiohttp.WSMsgType.BINARY:
@@ -205,7 +213,11 @@ class AveWebServer:
         """Actions to perform after connecting to the web server."""
         if self.ws_conn is None or self.ws_conn.closed:
             return
+
+        self._ldi_done.clear()
         await self.send_ws_command("LDI")  # Get device list
+        if not await self._wait_for_ldi():
+            return
 
         if self.settings.fetch_lights:
             # Get status by family type 1 (lights)
@@ -226,6 +238,10 @@ class AveWebServer:
 
     async def _start_thermostats_fetch_flow(self) -> None:
         """Start thermostat bootstrap flow without blocking message handling."""
+
+        """Some thermostats updates come with mapCommandId as a reference instead of device ID
+        so we need to fetch the map and commands to be able to link thermostats to their device ID and get their names if the setting is enabled.
+        """
         self.ave_map = AveMap()
         self._thermostat_lm_done.clear()
         self._thermostat_lmc_done.clear()
@@ -235,6 +251,17 @@ class AveWebServer:
 
         await self.send_ws_command("LM")
         self._thermostat_fetch_task = asyncio.create_task(self._termostats_fetch_flow())
+
+    async def _wait_for_ldi(self) -> bool:
+        """Wait for at least one LDI response before thermostat bootstrap."""
+        try:
+            await asyncio.wait_for(self._ldi_done.wait(), 15.0)
+        except TimeoutError:
+            _LOGGER.warning(
+                "Timed out waiting for LDI response; skipping thermostat bootstrap"
+            )
+            return False
+        return True
 
     async def _termostats_fetch_flow(self) -> None:
         # 1) wait until LM responses are received and the map is loaded
@@ -264,11 +291,8 @@ class AveWebServer:
             _LOGGER.warning("Timed out waiting for LMC responses; proceeding")
 
         # 4) request thermostat status snapshots
-        commands: list[AveMapCommand] = self.ave_map.get_commands_by_family(
-            AVE_FAMILY_THERMOSTAT
-        )
-        for thermostat_command in commands:
-            await self.send_ws_command("WTS", [int(thermostat_command.device_id)])
+        for device_id in self.all_thermostats_raw:
+            await self.send_ws_command("WTS", [str(device_id)])
 
     def value_to_hex(self, value):
         """Return the hexadecimal value of a number."""
@@ -592,6 +616,12 @@ class AveWebServer:
                 str(record[1]),
                 int(record[2]),
             )
+            if device_name and device_name[0] == "$":
+                # RGBW, unhandled
+                continue
+            if device_name and device_name[-1] == "$":
+                # DALI, unhandled
+                continue
             if device_type == AVE_FAMILY_ANTITHEFT_AREA:
                 # Antitheft area
                 self.update_binary_sensor(
@@ -604,8 +634,8 @@ class AveWebServer:
                 self.update_switch(self, AVE_FAMILY_SWITCH, device_id, -1, device_name)
                 # Light
             elif device_type == AVE_FAMILY_THERMOSTAT:
-                # Thermostat, retrieved with their dedicated bootstrap sequence
-                pass
+                # All thermostats
+                self.all_thermostats_raw[device_id] = device_name
             elif device_type == AVE_FAMILY_SCENARIO:
                 # Scenario
                 pass
@@ -619,6 +649,8 @@ class AveWebServer:
                     device_name,
                 )
                 continue
+
+        self._ldi_done.set()
 
     def manage_lm(self, parameters, records) -> None:
         """Manage LM List Map commands received from the web server."""
@@ -651,14 +683,10 @@ class AveWebServer:
         device_id = int(parameters[0])
         thermostat_properties = AveThermostatProperties.from_wts(parameters, records)
         thermostat_properties.device_name = (
-            f"thermostat_{thermostat_properties.device_name}"
+            f"thermostat_{thermostat_properties.device_id}"
         )
         if self.settings.get_entity_names:
-            command = self.ave_map.get_command_by_deviceid_and_family(
-                device_id, AVE_FAMILY_THERMOSTAT
-            )
-            if command and command.command_name:
-                thermostat_properties.device_name = command.command_name
+            thermostat_properties.device_name = self.all_thermostats_raw[device_id]
 
         self.update_thermostat(
             server=self,
