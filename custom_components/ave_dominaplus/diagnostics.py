@@ -77,6 +77,7 @@ async def async_get_config_entry_diagnostics(
             "connected": await webserver.is_connected(),
             "started": webserver.started,
             "closed": webserver.closed,
+            "systeminfo": dict(webserver.systeminfo),
             "raw_ldi_count": len(webserver.raw_ldi),
             "raw_ldi": _masked_raw_ldi(webserver.raw_ldi),
             "entity_counts": {

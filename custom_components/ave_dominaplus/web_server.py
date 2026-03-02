@@ -73,6 +73,7 @@ class AveWebServer:
         except KeyError:
             _LOGGER.exception("Missing key in settings data")
         self.mac_address = ""
+        self.systeminfo: dict[str, str] = {}
         self.hass = hass
         self.ws_conn: Any = None
         self._connected = False
@@ -152,6 +153,7 @@ class AveWebServer:
             )
             self._connected = True
             self.mac_address = await self.tryget_mac_address()
+            self.systeminfo = await self.tryget_systeminfo()
             _LOGGER.debug("Connected to WebSocket server at %s", self.settings.host)
         except Exception:
             _LOGGER.exception("Failed to connect to WebSocket server")
@@ -799,6 +801,49 @@ class AveWebServer:
             except Exception:
                 _LOGGER.exception("Error getting WebServer MAC ADDRESS")
                 return None
+
+    async def tryget_systeminfo(self) -> dict[str, str]:
+        """Try to get selected system information from the webserver."""
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"http://{self.settings.host}/systeminfo.php"
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        _LOGGER.error(
+                            "Failed to get WebServer system info. Status: %s",
+                            response.status,
+                        )
+                        return {}
+
+                    data = await response.text()
+                    try:
+                        root = DefusedET.fromstring(data)
+                    except DefusedET.ParseError:
+                        _LOGGER.exception("Invalid XML in systeminfo response")
+                        return {}
+
+                    keys = [
+                        "remotesupport",
+                        "os",
+                        "app",
+                        "launcher",
+                        "DPServer",
+                        "DPClient",
+                        "firmware",
+                        "cloud",
+                        "iot",
+                    ]
+
+                    systeminfo: dict[str, str] = {}
+                    for key in keys:
+                        element = root.find(key)
+                        if element is not None and element.text is not None:
+                            systeminfo[key] = element.text.strip()
+
+                    return systeminfo
+            except Exception:
+                _LOGGER.exception("Error getting WebServer system info")
+                return {}
 
     async def get_device_list_bridge(self) -> tuple[int, str | None]:
         """Get the device list from the bridge."""
