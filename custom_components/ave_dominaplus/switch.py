@@ -10,21 +10,21 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import BRAND_PREFIX
+from .const import AVE_FAMILY_SCENARIO, AVE_FAMILY_SWITCH, BRAND_PREFIX
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant | None,
+    _hass: HomeAssistant | None,
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up AVE dominaplus binary sensors.
 
     Args:
-        hass: Home Assistant instance.
+        _hass: Home Assistant instance.
         entry: Config entry for the integration.
         async_add_entities: Callback to add entities to Home Assistant.
 
@@ -32,7 +32,8 @@ async def async_setup_entry(
     webserver: AveWebServer = entry.runtime_data
     if not webserver:
         _LOGGER.error("AVE dominaplus: Web server not initialized")
-        raise ConfigEntryNotReady("Can't reach webserver")
+        connection_error = "Can't reach webserver"
+        raise ConfigEntryNotReady(connection_error)
 
     await webserver.set_async_add_sw_entities(async_add_entities)
     await webserver.set_update_switch(update_switch)
@@ -67,30 +68,36 @@ async def adopt_existing_sensors(server: AveWebServer, entry: ConfigEntry) -> No
                     family=family,
                     ave_device_id=ave_device_id,
                     is_on=None,
+                    webserver=server,
                     name=name,
                 )
-                sensor.hass = server.hass
                 sensor.entity_id = entity.entity_id
 
                 server.switches[entity.unique_id] = sensor
                 server.async_add_sw_entities([sensor])
-    except Exception as e:  # noqa: BLE001
-        _LOGGER.error("Error adopting existing sensors: %s", str(e))
+                _LOGGER.info(
+                    "Adopted existing switch entity with name %s with unique_id %s",
+                    sensor.name,
+                    sensor.unique_id,
+                )
+    except Exception:
+        _LOGGER.exception("Error adopting existing sensors")
         # raise ConfigEntryNotReady("Error adopting existing sensors") from e
 
 
-def set_sensor_uid(webserver: AveWebServer, family, ave_device_id):
+def set_sensor_uid(webserver: AveWebServer, family, ave_device_id) -> str:
     """Set the unique ID for the sensor."""
-    # TODO: This will ready up for multi-hub configurations but breack existing installations
-    # return f"ave_{webserver.mac_address}_switch_{family}_{ave_device_id}"  # Unique ID for the sensor
+    # TODO: This will ready up for multi-hub configurations
+    # but may break existing installations
+    # return f"ave_{webserver.mac_address}_switch_{family}_{ave_device_id}"
     return f"ave_switch_{family}_{ave_device_id}"
 
 
 def update_switch(
     server: AveWebServer, family, ave_device_id, device_status, name=None
-):
+) -> None:
     """Update switch based on the family and device status."""
-    if family == 1:
+    if family == AVE_FAMILY_SWITCH:
         if not server.settings.fetch_lights:
             return
     else:
@@ -132,7 +139,7 @@ def update_switch(
             ave_name=entity_ave_name,
         )
 
-        _LOGGER.info("Creating new switch entity %s", name)
+        _LOGGER.info("Creating new switch entity %s, unique_id %s", name, unique_id)
         server.switches[unique_id] = switch
         server.async_add_sw_entities([switch])  # Add the new sensor to Home Assistant
 
@@ -157,14 +164,16 @@ def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
 class LightSwitch(SwitchEntity):
     """Representation of a light switch."""
 
+    _attr_should_poll = False
+
     def __init__(
         self,
         unique_id: str,
         family: int,
         ave_device_id: int,
         is_on: int | None,
+        webserver: AveWebServer,
         name=None,
-        webserver: AveWebServer | None = None,
         ave_name: str | None = None,
     ) -> None:
         """Initialize the motion detection sensor."""
@@ -221,9 +230,12 @@ class LightSwitch(SwitchEntity):
             "AVE_family": self.family,
             "AVE_device_id": self.ave_device_id,
             "AVE_name": self._ave_name,
+            "AVE webserver MAC": self._webserver.mac_address
+            if self._webserver
+            else None,
         }
 
-    def update_state(self, is_on: int):
+    def update_state(self, is_on: int) -> None:
         """Update the state of the switch."""
         if is_on is None:
             return
@@ -232,14 +244,14 @@ class LightSwitch(SwitchEntity):
         self._attr_is_on = bool(is_on)  # Set the state to True (on) or False (off)
         self.async_write_ha_state()
 
-    def set_name(self, name: str | None):
+    def set_name(self, name: str | None) -> None:
         """Set the name of the sensor."""
         if name is None:
             return
         self._name = name
         self.async_write_ha_state()
 
-    def set_ave_name(self, name: str | None):
+    def set_ave_name(self, name: str | None) -> None:
         """Set the AVE name of the sensor."""
         if name is not None:
             self._ave_name = name
@@ -248,8 +260,8 @@ class LightSwitch(SwitchEntity):
     def build_name(self) -> str:
         """Build the name of the sensor based on its family and device ID."""
         suffix = "sensor type " + str(self.family)
-        if self.family == 1:
+        if self.family == AVE_FAMILY_SWITCH:
             suffix = "light"
-        elif self.family == 6:
-            suffix = "sccenario"
+        elif self.family == AVE_FAMILY_SCENARIO:
+            suffix = "scenario"
         return f"{BRAND_PREFIX} {suffix} {self.ave_device_id}"

@@ -4,16 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from types import MappingProxyType
-from typing import Any
-import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
+from defusedxml import ElementTree as DefusedET
 
-from homeassistant.core import HomeAssistant
-
-from .ave_map import AveMap, AveMapCommand
+from .ave_map import AveMap
 from .ave_thermostat import AveThermostatProperties
+from .const import (
+    AVE_FAMILY_ANTITHEFT,
+    AVE_FAMILY_ANTITHEFT_AREA,
+    AVE_FAMILY_CAMERA,
+    AVE_FAMILY_KEYPAD,
+    AVE_FAMILY_MOTION_SENSOR,
+    AVE_FAMILY_SCENARIO,
+    AVE_FAMILY_SWITCH,
+    AVE_FAMILY_THERMOSTAT,
+)
+
+if TYPE_CHECKING:
+    from types import MappingProxyType
+
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,9 +70,10 @@ class AveWebServer:
             self.settings.fetch_sensors = settings_data["fetch_sensors"]
             self.settings.fetch_lights = settings_data["fetch_lights"]
             self.settings.fetch_thermostats = settings_data["fetch_thermostats"]
-        except KeyError as e:
-            _LOGGER.error("Missing key in settings data: %s", e)
+        except KeyError:
+            _LOGGER.exception("Missing key in settings data")
         self.mac_address = ""
+        self.systeminfo: dict[str, str] = {}
         self.hass = hass
         self.ws_conn: Any = None
         self._connected = False
@@ -68,18 +81,22 @@ class AveWebServer:
         self.wtstask: asyncio.Task
         self.started = False
         self.closed = False
+        self.raw_ldi: list[Any] = []
         self.binary_sensors: dict = {}  # Track binary sensors by unique ID
         self.update_binary_sensor: Any = None
         self.async_add_bs_entities: Any = None
         self.switches: dict = {}  # Track switches by unique ID
         self.async_add_sw_entities: Any = None
         self.update_switch: Any = None
-        self.thermostats: dict[Any] = {}  # Track thermostats by ID
+        self.thermostats: dict = {}  # Track thermostats by ID
+        self.all_thermostats_raw: dict = {}  # Track thermostats that are not on the map by device ID
         self.async_add_th_entities: Any = None
         self.update_thermostat: Any = None
         self.ave_map: AveMap = AveMap()
+        self._ldi_done = asyncio.Event()
         self._thermostat_lm_done = asyncio.Event()
         self._thermostat_lmc_done = asyncio.Event()
+        self._connect_actions_task: asyncio.Task | None = None
         self._thermostat_fetch_task: asyncio.Task | None = None
         self.numbers: dict = {}  # Track number entities by unique ID
         self.async_add_number_entities: Any = None
@@ -118,7 +135,7 @@ class AveWebServer:
             self.async_add_number_entities = func
 
     async def set_update_th_offset(self, func) -> None:
-        """Set the method to add or update thermostat offset number entities."""
+        """Set the method to add/update thermostat offset number entities."""
         if self.update_th_offset is None:
             self.update_th_offset = func
 
@@ -136,15 +153,19 @@ class AveWebServer:
             )
             self._connected = True
             self.mac_address = await self.tryget_mac_address()
+            self.systeminfo = await self.tryget_systeminfo()
             _LOGGER.debug("Connected to WebSocket server at %s", self.settings.host)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.error("Failed to connect to WebSocket server: %s", err)
+        except Exception:
+            _LOGGER.exception("Failed to connect to WebSocket server")
             return False
         return True
 
     async def disconnect(self) -> None:
         """Disconnect from the web server."""
         self.closed = True
+        if self._connect_actions_task and not self._connect_actions_task.done():
+            self._connect_actions_task.cancel()
+            self._connect_actions_task = None
         if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
             self._thermostat_fetch_task.cancel()
             self._thermostat_fetch_task = None
@@ -173,7 +194,9 @@ class AveWebServer:
                         continue
 
                 if self.started:
-                    await self.on_connect_actions()
+                    self._connect_actions_task = asyncio.create_task(
+                        self.on_connect_actions()
+                    )
 
                 async for msg in self.ws_conn:
                     if msg.type == aiohttp.WSMsgType.BINARY:
@@ -182,37 +205,48 @@ class AveWebServer:
                         _LOGGER.error("WebSocket error", extra={"error": msg.data})
                         break
 
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.error("WebSocket connection error: %s", err)
+                self._connected = False
+
+            except Exception:
+                _LOGGER.exception("WebSocket connection error")
                 self._connected = False
                 await asyncio.sleep(5)  # Retry after a delay
 
         _LOGGER.debug("WebSocket connection stopped")
 
-    async def on_connect_actions(self):
+    async def on_connect_actions(self) -> None:
         """Actions to perform after connecting to the web server."""
-
         if self.ws_conn is None or self.ws_conn.closed:
             return
+
+        self._ldi_done.clear()
         await self.send_ws_command("LDI")  # Get device list
+        if not await self._wait_for_ldi():
+            return
 
         if self.settings.fetch_lights:
             # Get status by family type 1 (lights)
-            await self.send_ws_command("GSF", "1")
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_SWITCH)])
 
         # Get status by family type 12 (motion detection areas)
         if self.settings.fetch_sensor_areas:
-            await self.send_ws_command("GSF", ["12"])
-            await self.send_ws_command("WSF", "12")
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_ANTITHEFT_AREA)])
+            await self.send_ws_command("WSF", [str(AVE_FAMILY_ANTITHEFT_AREA)])
 
         if self.settings.fetch_thermostats:
             await self._start_thermostats_fetch_flow()
 
         await self.send_ws_command("SU3")  # Start streaming updates (most of them)
-        # await self.send_ws_command("SU2") # Starts streaming some other updates (UPD for TLO and XU , NET and CLD messages)
+
+        # Starts streaming some other updates (UPD for TLO and XU, NET and CLD)
+        # await self.send_ws_command("SU2")
 
     async def _start_thermostats_fetch_flow(self) -> None:
         """Start thermostat bootstrap flow without blocking message handling."""
+
+        """Some thermostats updates come with mapCommandId as a reference instead of device ID
+        so we need to fetch the map and commands to be able to link thermostats to their device ID and get their names if the setting is enabled.
+        """
         self.ave_map = AveMap()
         self._thermostat_lm_done.clear()
         self._thermostat_lmc_done.clear()
@@ -223,7 +257,18 @@ class AveWebServer:
         await self.send_ws_command("LM")
         self._thermostat_fetch_task = asyncio.create_task(self._termostats_fetch_flow())
 
-    async def _termostats_fetch_flow(self):
+    async def _wait_for_ldi(self) -> bool:
+        """Wait for at least one LDI response before thermostat bootstrap."""
+        try:
+            await asyncio.wait_for(self._ldi_done.wait(), 15.0)
+        except TimeoutError:
+            _LOGGER.warning(
+                "Timed out waiting for LDI response; skipping thermostat bootstrap"
+            )
+            return False
+        return True
+
+    async def _termostats_fetch_flow(self) -> None:
         # 1) wait until LM responses are received and the map is loaded
         try:
             await asyncio.wait_for(self._thermostat_lm_done.wait(), 15.0)
@@ -239,7 +284,7 @@ class AveWebServer:
                 _LOGGER.debug("LM map returned no areas")
                 return
             for map_id in self.ave_map.areas:
-                await self.send_ws_command("LMC", map_id)
+                await self.send_ws_command("LMC", [map_id])
         else:
             _LOGGER.debug("Map not loaded or ws disconnected; skipping LMC send")
             return
@@ -251,9 +296,8 @@ class AveWebServer:
             _LOGGER.warning("Timed out waiting for LMC responses; proceeding")
 
         # 4) request thermostat status snapshots
-        commands: list[AveMapCommand] = self.ave_map.GetCommandsByFamily(4)
-        for thermostatCommand in commands:
-            await self.send_ws_command("WTS", [int(thermostatCommand.device_id)])
+        for device_id in self.all_thermostats_raw:
+            await self.send_ws_command("WTS", [str(device_id)])
 
     def value_to_hex(self, value):
         """Return the hexadecimal value of a number."""
@@ -269,7 +313,7 @@ class AveWebServer:
         lsb = self.value_to_hex(crc & 0xF)
         return msb + lsb
 
-    async def on_message(self, message):
+    async def on_message(self, message) -> None:
         """Handle incoming messages from the web server."""
         # _LOGGER.debug("Received message: %s", message)
         try:
@@ -285,11 +329,18 @@ class AveWebServer:
                 cmd_params, *records_data = str_msg.split(chr(0x1E))
                 command, *parameters = cmd_params.split(chr(0x1D))
                 records = [record.split(chr(0x1D)) for record in records_data]
-                await self.manage_commands(command, parameters, records)
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.error("Error processing message", exc_info=e)
+                await self.manage_incoming_messages_messages(
+                    command, parameters, records
+                )
+        except Exception:
+            _LOGGER.exception("Error processing message")
 
-    async def send_ws_command(self, command, parameters=None, records=None):
+    async def send_ws_command(
+        self,
+        command: str,
+        parameters: list[Any] | None = None,
+        records: list[list[Any]] | None = None,
+    ) -> None:
         """Send a command to the web server."""
         message = chr(0x02) + command
         payload = ""
@@ -303,7 +354,7 @@ class AveWebServer:
         if records is not None:
             if not isinstance(records, (list, tuple)):
                 records = str(records).split(",")
-            for record in records:
+            for record in records:  # pyright: ignore[reportOptionalIterable]
                 payload += chr(0x1E)
                 if isinstance(record, (list, tuple)):
                     record_string = ",".join(str(item) for item in record)
@@ -318,14 +369,13 @@ class AveWebServer:
         if self.ws_conn and not self.ws_conn.closed:
             await self.ws_conn.send_str(full_message)
             escaped_message = full_message.encode("unicode_escape").decode("ascii")
-            escaped_message = (
-                full_message.encode("unicode_escape").decode("ascii")
-            )
             _LOGGER.debug("Sent command: %s", escaped_message)
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def manage_commands(self, command, parameters, records):
+    async def manage_incoming_messages_messages(
+        self, command: str, parameters: list[Any], records: list[list[Any]]
+    ) -> None:
         """Manage commands received from the web server."""
         if command == "pong":
             pass
@@ -367,11 +417,13 @@ class AveWebServer:
                 },
             )
 
-    def manage_upd(self, parameters, records):
+    def manage_upd(self, parameters, records) -> None:
         """Manage UPD commands received from the web server."""
-        # _LOGGER.debug(
-        #     "Received UPD command. Parameters: %s Records: %s", parameters, records
-        # )
+        _LOGGER.debug(
+            "Received UPD command. Parameters: %s | Records: %s",
+            parameters,
+            records,
+        )
         if parameters[0] == "WS":
             device_type, device_id, device_status = (
                 int(parameters[1]),
@@ -381,18 +433,29 @@ class AveWebServer:
             if device_id > 200000:
                 # Devices with ID > 2000000 must be scenarios or something...
                 pass
-            elif device_type == 1 and self.settings.fetch_lights:
+            elif device_type == AVE_FAMILY_SWITCH and self.settings.fetch_lights:
                 self.update_switch(self, device_type, device_id, device_status, None)
-            # if device_type in [12, 13]:
-            #     log_with_timestamp(f"Received async Antitheft status update. Device ID: {device_id}, Device Type: {device_type}, Status: {device_status}")
+            # elif device_type in [12, 13]:
+            #     _LOGGER.debug(
+            #         "Received async Antitheft status update. "
+            #         "Device ID: %s, Device Type: %s, Status: %s",
+            #         device_id,
+            #         device_type,
+            #         device_status,
+            #     )
             # else:
-            #     if device_type in [1, 2, 22, 9, 3, 16, 19, 6]:  # Limited to [Lighting / Energy / Shutters / Scenarios] for security reasons ---
+            # if device_type in [1, 2, 22, 9, 3, 16, 19, 6]:
+            #     """Limited to [Lighting / Energy / Shutters / Scenarios]
+            #     for security reasons"""
+            #     pass
         elif parameters[0] == "X" and parameters[1] == "A":  # ANTITHEFT AREA
             if not self.settings.fetch_sensor_areas:
-                # If the user doesn't want to fetch sensor areas, skip this
                 return
 
-            # parameters[2] is the area ID. all other parameters are == 0 when triggered, parameters[6] == 1 when cleared
+            """parameters[2] is the area ID.
+            all other parameters are == 0 when triggered,
+            parameters[6] == 1 when cleared"""
+
             area_progressive = int(parameters[2])
             # area_engaged = int(parameters[3])
             # area_in_alarm = int(parameters[5])
@@ -400,295 +463,297 @@ class AveWebServer:
             status = 1
             if area_clear > 0:
                 status = 0
-            self.update_binary_sensor(self, 12, area_progressive, status)
-            # (f"{ANTITHEFT_PREFIX} XA - areaID: {area_progressive} - engaged: {area_engaged} - clear: {area_clear} - alarm: {area_in_alarm}")
+            self.update_binary_sensor(
+                self, AVE_FAMILY_ANTITHEFT_AREA, area_progressive, status
+            )
+            # f"XA - areaID: {area_progressive}
+            # - engaged: {area_engaged}
+            # - clear: {area_clear}
+            # - alarm: {area_in_alarm}")
         elif parameters[0] == "X" and parameters[1] == "S":  # ANTITHEFT SENSOR
             if not self.settings.fetch_sensors:
-                # If the user doesn't want to fetch sensors, skip this
                 return
             self.update_binary_sensor(
-                self, 1007, int(parameters[2]), int(parameters[4])
+                self, AVE_FAMILY_MOTION_SENSOR, int(parameters[2]), int(parameters[4])
             )
         elif parameters[0] == "X" and parameters[1] == "U":
             # ANTITHEFT UNIT (requires SU2)
             _LOGGER.debug("XU Antitheft Unit - engaged", extra={"id": parameters[2]})
+        elif parameters[0] == "X" and parameters[1] == "A":
+            # ANTITHEFT AREA (not handled yed)
+            pass
         elif parameters[0] == "WT":
+            # Serveral updates for thermostats, using Device ID as identifier
             if parameters[1] == "O":
                 self.update_thermostat(
                     server=self,
-                    family=4,
-                    ave_device_id=int(parameters[2]),
-                    property_name="offset",
-                    property_value=int(parameters[3]) / 10,
+                    parameters=parameters,
+                    records=records,
+                    command=None,
+                    properties=None,
+                    ave_device_id=None,
                 )
                 self.update_th_offset(
                     server=self,
-                    family=4,
+                    family=AVE_FAMILY_THERMOSTAT,
                     ave_device_id=int(parameters[2]),
                     offset_value=int(parameters[3]) / 10,
                 )
-            elif parameters[1] == "S":  # THERMOSTAT SEASON
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=int(parameters[2]),
-                    property_name="season",
-                    property_value=int(parameters[3]) / 10,
-                )
-            elif parameters[1] == "T":  # THERMOSTAT TEMPERATURE
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=int(parameters[2]),
-                    property_name="temperature",
-                    property_value=int(parameters[3]) / 10,
-                )
-            elif parameters[1] == "L":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=int(parameters[2]),
-                    property_name="fan_level",
-                    property_value=int(parameters[3]),
-                )
-            elif parameters[1] == "Z":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=int(parameters[2]),
-                    property_name="local_off",
-                    property_value=int(parameters[3]),
-                )
-        elif parameters[0] == "TM":
+        elif parameters[0] in ["TM", "TW", "TP"]:
+            # Thermostats update with device ID as identifier
             self.update_thermostat(
                 server=self,
-                family=4,
-                ave_device_id=int(parameters[1]),
-                property_name="mode",
-                property_value=parameters[2],
+                parameters=parameters,
+                records=records,
+                command=None,
+                properties=None,
+                ave_device_id=None,
             )
-        elif parameters[0] == "TW":
-            self.update_thermostat(
-                server=self,
-                family=4,
-                ave_device_id=int(parameters[1]),
-                property_name="window_state",
-                property_value=int(parameters[2]),
-            )
-        elif parameters[0] == "TP":
-            self.update_thermostat(
-                server=self,
-                family=4,
-                ave_device_id=int(parameters[1]),
-                property_name="set_point",
-                property_value=int(parameters[2]) / 10,
-            )
-        elif parameters[0] in ["TT", "TR", "TL", "TLO", "TO", "TS"]:  # THERMOSTAT
+        elif parameters[0] in ["TT", "TR", "TL", "TLO", "TO", "TS"]:
+            # THERMOSTAT updates with command ID as identifier
             if (
                 not self.ave_map
                 or not self.ave_map.areas_loaded
                 or not self.ave_map.command_loaded
             ):
-                _LOGGER.debug(
-                    "Received thermostat update before map/commands loaded; skipping"
-                )
+                _LOGGER.debug("Received th update before map/commands loaded; skipping")
                 return
-            _command = self.ave_map.GetCommandByIdAndFamily(int(parameters[1]), 4)
+            _command = self.ave_map.get_command_by_id_and_family(
+                int(parameters[1]), AVE_FAMILY_THERMOSTAT
+            )
             if not _command:
                 _LOGGER.debug(
-                    "Received thermostat update for unknown command ID %s; skipping",
+                    "Received th update for unknown command ID %s; skipping",
                     parameters[1],
                 )
                 return
-
-            if parameters[0] == "TT":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=_command.device_id,
-                    property_name="temperature",
-                    property_value=int(parameters[2]) / 10,
-                )
-            elif parameters[0] == "TL":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=_command.device_id,
-                    property_name="fan_level",
-                    property_value=int(parameters[2]),
-                )
-            elif parameters[0] == "TLO":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=_command.device_id,
-                    property_name="local_off",
-                    property_value=(1 if int(parameters[2]) == 0 else 0),
-                )
-            elif parameters[0] == "TO":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=_command.device_id,
-                    property_name="offset",
-                    property_value=int(parameters[2]),
-                )
-            elif parameters[0] == "TS":
-                self.update_thermostat(
-                    server=self,
-                    family=4,
-                    ave_device_id=_command.device_id,
-                    property_name="season",
-                    property_value=int(parameters[2]),
-                )
-        elif parameters[0] == "GUI":
-            # Reload gui
+            self.update_thermostat(
+                server=self,
+                parameters=parameters,
+                records=records,
+                command=_command,
+                properties=None,
+                ave_device_id=None,
+            )
+        elif parameters[0] in ["GUI", "D"]:
+            # Reload gui or update icon
             pass
+        elif parameters[0] in [
+            "HO",
+            "VMM",
+            "TAF",
+            "TK",
+            "UMI",
+            "S",
+            "VI",
+            "A",
+            "CS1",
+            "CS2",
+            "CS3",
+            "abl",
+            "LL",
+            "SRE",
+            "STO",
+            "RGB",
+            "grp",
+            "epv",
+            "htl",
+        ]:
+            """
+            Not handled known updates
+            HO: fot TS1 devices
+            WMM: daikin mode
+            TAF: thermostat anti freezing
+            TK: themrostat keyboard lock
+            UMI: humidity probe
+            S: tutondo
+            VI: vivaldi
+            A , CS1, CS2, CS3: alarm
+            abl: abano
+            LL: label update
+            SRE, STO: alarm silence
+            RGB : colorwheel update
+            grp: group dimmer?
+            epv: economizer values
+            htl: hotel
+            """
         else:
-            _LOGGER.warning(
-                "Not yet handled UPD %s",
+            _LOGGER.debug(
+                "Received not unknown UPD %s",
                 parameters[0],
                 extra={"parameters": parameters},
             )
 
-    def manage_gsf(self, parameters, records):
-        """Manage GSF Get Status by Family commands received from the web server."""
-        _LOGGER.info(
-            "Received GSF (Get status by family) command for family %s",
+    def manage_gsf(self, parameters: list[Any], records: list[list[Any]]) -> None:
+        """Manage GSF Get Status by Family responses."""
+        _LOGGER.debug(
+            "Received GSF (Get status by family) response for family %s, parameters: %s | records: %s",
             parameters[0],
-            extra={"parameters": parameters, "records": records},
+            parameters,
+            records,
         )
-        if parameters[0] in ["7", "12"]:  # Motion detection types
+        if parameters[0] in [
+            str(AVE_FAMILY_ANTITHEFT),
+            str(AVE_FAMILY_ANTITHEFT_AREA),
+        ]:  # Motion detection types
             for record in records:
                 device_id, device_status = int(record[0]), int(record[1])
                 self.update_binary_sensor(
                     self, int(parameters[0]), device_id, device_status
                 )
 
-        if parameters[0] == "1":
+        if parameters[0] == str(AVE_FAMILY_SWITCH):
             for record in records:
                 device_id, device_status = int(record[0]), int(record[1])
-                self.update_switch(self, 1, device_id, device_status, None)
+                self.update_switch(
+                    self, AVE_FAMILY_SWITCH, device_id, device_status, None
+                )
                 # send_mqtt_message(device_id, device_status)
 
-    def manage_ldi(self, parameters, records):
+    def manage_ldi(self, parameters: list[Any], records: list[list[Any]]) -> None:
         """Manage LDI List Devices commands received from the web server."""
-        _LOGGER.info(
-            "Parsing LDI (List Devices) command",
-            extra={"parameters": parameters, "records": records},
+        _LOGGER.debug(
+            "Parsing LDI (List Devices) command, parameters: %s | records: %s",
+            parameters,
+            records,
         )
+        self.raw_ldi = []
         for record in records:
             device_id, device_name, device_type = (
                 int(record[0]),
                 str(record[1]),
                 int(record[2]),
             )
-            if device_type == 12:
+            self.raw_ldi.append(
+                {
+                    "device_id": device_id,
+                    "device_name": device_name,
+                    "device_type": device_type,
+                }
+            )
+            if device_name and device_name[0] == "$":
+                # RGBW, unhandled
+                continue
+            if device_name and device_name[-1] == "$":
+                # DALI, unhandled
+                continue
+            if device_type == AVE_FAMILY_ANTITHEFT_AREA:
                 # Antitheft area
-                self.update_binary_sensor(self, 12, device_id, -1, device_name)
-            elif device_type == 11:
+                self.update_binary_sensor(
+                    self, AVE_FAMILY_ANTITHEFT_AREA, device_id, -1, device_name
+                )
+            elif device_type == AVE_FAMILY_KEYPAD:
                 # Keypad
                 pass
-            elif device_type == 1:
-                self.update_switch(self, 1, device_id, -1, device_name)
+            elif device_type == AVE_FAMILY_SWITCH:
+                self.update_switch(self, AVE_FAMILY_SWITCH, device_id, -1, device_name)
                 # Light
-            elif device_type == 4:
-                # Thermostat
-                pass
-            elif device_type == 6:
+            elif device_type == AVE_FAMILY_THERMOSTAT:
+                # All thermostats
+                self.all_thermostats_raw[device_id] = device_name
+            elif device_type == AVE_FAMILY_SCENARIO:
                 # Scenario
                 pass
-            elif device_type == 8:
+            elif device_type == AVE_FAMILY_CAMERA:
                 # Camera
                 pass
             else:
                 _LOGGER.debug(
-                    "Unknown device type %s for %s, skipping", device_type, device_name
+                    "Unknown device type %s for %s, skipping",
+                    device_type,
+                    device_name,
                 )
                 continue
 
-    def manage_lm(self, parameters, records):
+        self._ldi_done.set()
+
+    def manage_lm(self, parameters, records) -> None:
         """Manage LM List Map commands received from the web server."""
         _LOGGER.debug(
-            "Parsing LM (List Map) command",
-            extra={"parameters": parameters, "records": records},
+            "Parsing LM (List Map) command, parameters: %s | records: %s",
+            parameters,
+            records,
         )
-        self.ave_map.LoadAreasFromWsRecords(records)
+        self.ave_map.load_areas_from_wsrecords(records)
         self.ave_map.areas_loaded = True
         self._thermostat_lm_done.set()
 
-    def manage_lmc(self, parameters, records):
-        """Manage LMC List Map Commands commands received from the web server."""
+    def manage_lmc(self, parameters, records) -> None:
+        """Manage LMC List Map Commands responses."""
         _LOGGER.debug(
-            "Parsing LMC (List Map Commands) command, parameters: %s | records: %s",
+            "Parsing LMC response, parameters: %s | records: %s",
             parameters,
             records,
         )
         area_id = int(parameters[0])
-        self.ave_map.LoadAreaCommands(area_id, records)
+        self.ave_map.load_area_commands(area_id, records)
         if self.ave_map.command_loaded:
             self._thermostat_lmc_done.set()
 
-    def manage_wts(self, parameters, records):
-        """Manage WTS command responses received from the web server."""
+    def manage_wts(self, parameters: list[Any], records: list[list[Any]]) -> None:
+        """Manage WTS command responses."""
         _LOGGER.debug(
-            "Parsing WTS response",
-            extra={"parameters": parameters, "records": records},
+            "Parsing WTS response, parameters: %s | records: %s",
+            parameters,
+            records,
         )
         device_id = int(parameters[0])
-        thermostatProperties = AveThermostatProperties.from_wts(parameters, records)
-        thermostatProperties.device_name = (
-            f"thermostat_{thermostatProperties.device_name}"
+        thermostat_properties = AveThermostatProperties.from_wts(parameters, records)
+        thermostat_properties.device_name = (
+            f"thermostat_{thermostat_properties.device_id}"
         )
         if self.settings.get_entity_names:
-            command = self.ave_map.GetCommandByDeviceIdAndFamily(device_id, 4)
-            if command and command.command_name:
-                thermostatProperties.device_name = command.command_name
+            thermostat_properties.device_name = self.all_thermostats_raw[device_id]
 
         self.update_thermostat(
             server=self,
-            family=4,
+            parameters=parameters,
+            records=records,
+            command=None,
+            properties=thermostat_properties,
             ave_device_id=device_id,
-            properties=thermostatProperties,
         )
-        self.update_th_offset(
-            server=self,
-            family=4,
-            ave_device_id=device_id,
-            offset_value=thermostatProperties.offset,
-            name=thermostatProperties.device_name,
-        )
+        if thermostat_properties.offset is not None:
+            self.update_th_offset(
+                server=self,
+                family=AVE_FAMILY_THERMOSTAT,
+                ave_device_id=device_id,
+                offset_value=thermostat_properties.offset,
+                name=thermostat_properties.device_name,
+            )
 
-    async def switch_turn_on(self, device_id: int):
+    async def switch_turn_on(self, device_id: int) -> None:
         """Turn on the switch."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), "11"])
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def switch_turn_off(self, device_id: int):
+    async def switch_turn_off(self, device_id: int) -> None:
         """Turn off the switch."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), "12"])
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def switch_toggle(self, device_id: int):
-        """Turn off the switch."""
+    async def switch_toggle(self, device_id: int) -> None:
+        """Toggle the switch."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), "10"])
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def send_thermostat_sts(self, parameters, records):
+    async def send_thermostat_sts(
+        self, parameters: list[Any], records: list[list[Any]]
+    ) -> None:
         """Send a command to update the thermostat season/temperatures."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("STS", parameters, records)
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def thermostat_on_off(self, device_id: int, on_off: int):
-        """Send a command to update the thermostat season/temperatures."""
+    async def thermostat_on_off(self, device_id: int, on_off: int) -> None:
+        """Turn the thermostat on or off."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("TOO", [str(device_id), str(on_off)])
         else:
@@ -707,29 +772,27 @@ class AveWebServer:
                         return response.status, data
                     _LOGGER.error("Failed to call bridge. Status: %s", response.status)
                     return response.status, None
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.error("Error calling bridge: %s", err)
+            except Exception:
+                _LOGGER.exception("Error calling bridge")
                 return 900, None
 
     async def tryget_mac_address(self) -> str | None:
+        """Try to get the MAC address of the webserver."""
         async with aiohttp.ClientSession() as session:
             try:
                 url = f"http://{self.settings.host}/revealcode.php"
                 async with session.get(url) as response:
                     if response.status == 200:
                         data = await response.text()
-                        _LOGGER.debug("revealcode response: %s", data)
+                        # _LOGGER.debug("revealcode response: %s", data)
 
                         try:
-                            root = ET.fromstring(data)
+                            root = DefusedET.fromstring(data)
                             xml_mac = root.findtext("macaddress")
                             if xml_mac:
                                 return xml_mac.strip().lower()
-                        except ET.ParseError as err:
-                            _LOGGER.error(
-                                "Invalid XML in revealcode response: %s",
-                                err,
-                            )
+                        except DefusedET.ParseError:
+                            _LOGGER.exception("Invalid XML in revealcode response")
                         _LOGGER.warning(
                             "No macaddress tag found in revealcode response"
                         )
@@ -739,9 +802,52 @@ class AveWebServer:
                         response.status,
                     )
                     return None
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.error("Error getting WebServer MAC ADDRESS: %s", err)
+            except Exception:
+                _LOGGER.exception("Error getting WebServer MAC ADDRESS")
                 return None
+
+    async def tryget_systeminfo(self) -> dict[str, str]:
+        """Try to get selected system information from the webserver."""
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"http://{self.settings.host}/systeminfo.php"
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        _LOGGER.error(
+                            "Failed to get WebServer system info. Status: %s",
+                            response.status,
+                        )
+                        return {}
+
+                    data = await response.text()
+                    try:
+                        root = DefusedET.fromstring(data)
+                    except DefusedET.ParseError:
+                        _LOGGER.exception("Invalid XML in systeminfo response")
+                        return {}
+
+                    keys = [
+                        "remotesupport",
+                        "os",
+                        "app",
+                        "launcher",
+                        "DPServer",
+                        "DPClient",
+                        "firmware",
+                        "cloud",
+                        "iot",
+                    ]
+
+                    systeminfo: dict[str, str] = {}
+                    for key in keys:
+                        element = root.find(key)
+                        if element is not None and element.text is not None:
+                            systeminfo[key] = element.text.strip()
+
+                    return systeminfo
+            except Exception:
+                _LOGGER.exception("Error getting WebServer system info")
+                return {}
 
     async def get_device_list_bridge(self) -> tuple[int, str | None]:
         """Get the device list from the bridge."""

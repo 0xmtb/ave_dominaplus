@@ -6,6 +6,16 @@
   "documentation": "https://github.com/emmeoerre/ave_dominaplus",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "version": "1.1.1",
-  "issue_tracker": "https://github.com/emmeoerre/ave_dominaplus/issues"
+  "issue_tracker": "https://github.com/emmeoerre/ave_dominaplus/issues",
+  "version": "1.2.0",
+  "zeroconf": [
+    {
+      "type": "_udisks-ssh._tcp.local.",
+      "name": "ave-ws*"
+    },
+    {
+      "type": "_workstation._tcp.local.",
+      "name": "ave-ws*"
+    }
+  ]
 }

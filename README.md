@@ -7,18 +7,17 @@ Control your AVE Dominaplus home automation system directly from Home Assistant!
 ## 📋 Requirements
 
 - An **AVE webserver device** installed and accessible from your Home Assistant instance.
-- **Alarm units** connected to the webserver (required for motion sensors and alarm zones).
 - Only tested with the **"autologin" setting** enabled in the webserver.
 - **AVE Cloud configuration is NOT required**.
-
+- **Alarm units** connected to the webserver (required for motion sensors and alarm zones).
 ---
 
 ## 🚀 Installation
 
 1. Install the integration via HACS (recommended) or manually copy the files to your `custom_components` directory.
-2. In Home Assistant, go to **Settings → Devices & Services → Add Integration**.
-3. Search for **"AVE Dominaplus"** and select it.
-4. Provide the webserver IP address and configure additional settings as needed.
+2. At this point Home Assistant may autodiscover the AVE webserver and show a configuration prompt. If you see it, open that prompt and continue from there.
+3. If no autodiscovery prompt appears go to **Settings → Devices & Services → Add Integration**. Search for **"AVE Dominaplus"** and select it manually.
+4. In the configuration prompt provide the webserver IP address and configure additional settings as needed.
 
 ---
 
@@ -46,7 +45,7 @@ Control your AVE Dominaplus home automation system directly from Home Assistant!
 ### ✅ Thermostats
 - **Supported** when **"Get thermostats"** is enabled in the config flow.
 - For each thermostat the integration creates two entities:
-  * a **climate** entity (`AveThermostat`) representing the controller
+  * a **climate** entity representing the controller
   * a **number** entity showing the current temperature offset of the device (–5 °C..+5 °C)
 
 #### Climate entity behaviour
@@ -67,10 +66,6 @@ Control your AVE Dominaplus home automation system directly from Home Assistant!
   physical thermostat itself.  The sensor simply mirrors the value reported
   by the device.
 
-#### Naming
-Entity names are obtained from the webserver when the
-"Get entities names from webserver" option is enabled.  Otherwise
-generated names based on family and device ID are used.
 ---
 
 ## 🔜 Not yet supported (contributors welcome!)
@@ -99,30 +94,61 @@ The integration supports two naming strategies:
    - Names are automatically generated.
 
 **Tip**: If you plan to customize entity names:
-The integration tries its best to not override your custom names. But for better measure:
+The integration tries its best to not override your custom names even if they are changed in the AVE apps. But for better measure:
 - First, enable **"Get entities names from webserver"** to discover all entities.
 - Then, disable this option before setting custom names to prevent overwriting.
 
 ---
 
+## ❓ Frequently asked questions
+
+### I don’t see certain device types after installation
+First verify the device type is listed under “Supported Devices” above. If
+it is supported and still not visible, reconfigure the integration in Home
+Assistant (Settings → Devices & Services → your AVE entry → ⋮ menu →
+Reconfigure).  Items added in a newer version may not appear until the entry
+has been re‑configured.
+
+
 ## ⚠️ Known Issues
 
 ### Multiple Webservers for Different Plants
-- Currently, multiple webservers for different plants are **not supported**. Multiple controllers for the
-   same plant are supported, but separate plant setups may cause device ID clashes. Support for
-   multi-plant setups is being explored.
+- Currently, multiple webservers for different plants are **not supported**. Multiple controllers for the same plant are supported, but separate plant setups may cause device ID clashes. Support for multi-plant setups is being explored.
 
 ### Individual sensor alarm states after power outage
-- After a webserver or alarm unit reboot, a brief arm/disarm cycle may be needed for sensors to
-   start reporting state updates. This behavior is due to the alarm system firmware, not the
-   integration.
+- After a webserver or alarm unit reboot, a brief arm/disarm cycle may be needed for sensors to start reporting state updates. This behavior is due to the alarm system firmware, not the integration.
+
+
+## 🆘 How to ask for help
+
+Before opening an issue:
+
+* Make sure the integration is up to date.
+* Check the **FAQ** and **Known Issues** sections above; your question may already be answered.
+
+When creating a GitHub issue:
+
+* Search for an existing issue describing the same problem and add additional information there instead
+  of opening a duplicate.
+* Do **not** post on unrelated issues; off-topic comments may be removed.
+* Provide as much relevant information as you can:
+  - integration version,
+  - Home Assistant version,
+  - webserver firmware version,
+  - model of the affected device(s),
+  - log output with the `ave_dominaplus` domain set to `debug` (capture the messages
+    emitted when the integration starts).
+
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & developing
 
 Contributions are welcome! If you encounter issues or have feature requests, feel free to open an issue or submit a pull request on GitHub.
 You can join our [discord server](https://discord.gg/PQ52jwV6BX)
+
+Development setup and debugging guide (VS Code on Windows + WSL): [docs/development/vscode-windows.md](docs/development/vscode-windows.md)
+
 ---
 
 ## 📜 License
