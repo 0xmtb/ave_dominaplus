@@ -1,5 +1,6 @@
 """Climate sensor platform for AVE dominaplus integration."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -165,7 +166,7 @@ def update_thermostat(
                     family=AVE_FAMILY_THERMOSTAT,
                     ave_device_id=command.device_id,
                     property_name="season",
-                    property_value=int(parameters[2]),
+                    property_value=parameters[2],
                 )
     elif parameters[0] == "WT":
         match parameters[1]:
@@ -183,7 +184,7 @@ def update_thermostat(
                     family=AVE_FAMILY_THERMOSTAT,
                     ave_device_id=int(parameters[2]),
                     property_name="season",
-                    property_value=int(parameters[3]) / 10,
+                    property_value=parameters[3],
                 )
             case "T":
                 _update_thermostat(
@@ -397,7 +398,7 @@ class AveThermostat(ClimateEntity):
                 int(self.ave_properties.fan_level), first_update=first_update
             )
 
-        if str(self.ave_properties.local_off) == "1":
+        if self.ave_properties.local_off == 1:
             self._attr_hvac_mode = HVACMode.OFF
 
         if not first_update:
@@ -421,10 +422,10 @@ class AveThermostat(ClimateEntity):
             _fan_level: int = int(value) if value is not None else -1
             self.update_from_fan_level(_fan_level)
         elif property_name == "local_off":
-            self.ave_properties.local_off = str(value)
-            if self.ave_properties.local_off == "1":
+            self.ave_properties.local_off = int(value)
+            if self.ave_properties.local_off == 1:
                 self._attr_hvac_mode = HVACMode.OFF
-            elif str(self.ave_properties.season) == "0":
+            elif self.ave_properties.season == "0":
                 self._attr_hvac_mode = HVACMode.COOL
             else:
                 self._attr_hvac_mode = HVACMode.HEAT
@@ -432,9 +433,9 @@ class AveThermostat(ClimateEntity):
             # Offset is not directly represented in Home Assistant
             self.ave_properties.offset = value
         elif property_name == "season":
-            if value == 0:
+            if value == "0":
                 self._attr_hvac_mode = HVACMode.COOL
-            elif value == 1:
+            elif value == "1":
                 self._attr_hvac_mode = HVACMode.HEAT
             self.ave_properties.season = value
         elif property_name == "window_state":
@@ -542,6 +543,13 @@ class AveThermostat(ClimateEntity):
                 device_id=self.ave_properties.device_id, on_off=0
             )
         elif hvac_mode in {HVACMode.HEAT, HVACMode.COOL}:
+            # TODO Tries to turn on the thermostat if it's currently off, needs testing
+            if self.hvac_mode == HVACMode.OFF:
+                await self._webserver.thermostat_on_off(
+                    device_id=self.ave_properties.device_id, on_off=1
+                )
+                await asyncio.sleep(1)
+
             if self._attr_target_temperature is None:
                 _LOGGER.error(
                     "Cannot set hvac mode: target temperature not defined for device_id %s",

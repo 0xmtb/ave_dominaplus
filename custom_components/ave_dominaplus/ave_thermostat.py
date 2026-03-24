@@ -12,12 +12,12 @@ class AveThermostatProperties:
         self.fan_level: int = -1
         self.configuration: str = ""
         self.offset: float | None = None
-        self.season: int = -1
+        self.season: str = ""
         self.temperature: float = 0.0
         self.mode: str = ""
         self.set_point: float | None = None
         self.forced_mode: int = 0
-        self.local_off: str = ""
+        self.local_off: int | None = None
 
     @staticmethod
     def from_wts(
@@ -53,8 +53,7 @@ class AveThermostatProperties:
         props.configuration = get_record_value(2) or ""
         offset_str = get_record_value(3)
         props.offset = int(offset_str) / 10 if offset_str is not None else None
-        season_str = get_record_value(4)
-        props.season = int(season_str) if season_str is not None else -1
+        props.season = get_record_value(4) or ""
         temperature_str = get_record_value(5)
         props.temperature = (
             int(temperature_str) / 10 if temperature_str is not None else 0.0
@@ -67,5 +66,6 @@ class AveThermostatProperties:
         props.set_point = int(set_point_str) / 10 if set_point_str is not None else None
         forced_mode_str = get_record_value(8)
         props.forced_mode = int(forced_mode_str) if forced_mode_str is not None else 0
-        props.local_off = get_record_value(9) or ""
+        local_off_str = get_record_value(9)
+        props.local_off = int(local_off_str) if local_off_str is not None else None
         return props
