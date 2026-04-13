@@ -220,7 +220,8 @@ class AveWebServer:
             return
 
         self._ldi_done.clear()
-        await self.send_ws_command("LDI")  # Get device list
+        # await self.send_ws_command("LDI")  # Get device list (legacy)
+        await self.send_ws_command("LI2")  # Get device list (with addresses)
         if not await self._wait_for_ldi():
             return
 
@@ -387,8 +388,8 @@ class AveWebServer:
             self.manage_gsf(parameters, records)
         elif command == "upd":
             self.manage_upd(parameters, records)
-        elif command == "ldi":
-            self.manage_ldi(parameters, records)
+        elif command in {"ldi", "li2"}:
+            self.manage_ldi_li2(parameters, records, command)
         elif command == "lm":
             self.manage_lm(parameters, records)
         elif command == "lmc":
@@ -610,25 +611,47 @@ class AveWebServer:
                 )
                 # send_mqtt_message(device_id, device_status)
 
-    def manage_ldi(self, parameters: list[Any], records: list[list[Any]]) -> None:
-        """Manage LDI List Devices commands received from the web server."""
+    def manage_ldi_li2(
+        self, parameters: list[Any], records: list[list[Any]], command: str
+    ) -> None:
+        """Manage LDI/LI2 List Devices commands received from the web server."""
         _LOGGER.debug(
-            "Parsing LDI (List Devices) command, parameters: %s | records: %s",
+            "Parsing %s (List Devices) command, parameters: %s | records: %s",
+            command,
             parameters,
             records,
         )
         self.raw_ldi = []
         for record in records:
-            device_id, device_name, device_type = (
+            device_id, device_name, device_type, address = (
                 int(record[0]),
                 str(record[1]),
                 int(record[2]),
+                record[3],
             )
+            # record[3] contains the decimal representation of the address
+            address_dec = None
+            address_hex = None
+            if command == "li2":
+                try:
+                    address_dec = int(str(address).strip())
+                except Exception:
+                    _LOGGER.debug(
+                        "Failed parsing address '%s'; leaving address_dec unset",
+                        address,
+                    )
+                    address_dec = None
+                # Store address as two-digit uppercase hex string when available
+                address_hex = (
+                    format(address_dec & 0xFF, "02X") if address_dec is not None else ""
+                )
             self.raw_ldi.append(
                 {
                     "device_id": device_id,
                     "device_name": device_name,
                     "device_type": device_type,
+                    "address_dec": address_dec,
+                    "address_hex": address_hex,
                 }
             )
             if device_name and device_name[0] == "$":
@@ -646,11 +669,17 @@ class AveWebServer:
                 # Keypad
                 pass
             elif device_type == AVE_FAMILY_SWITCH:
-                self.update_switch(self, AVE_FAMILY_SWITCH, device_id, -1, device_name)
+                self.update_switch(
+                    self, AVE_FAMILY_SWITCH, device_id, -1, device_name, address_dec
+                )
                 # Light
             elif device_type == AVE_FAMILY_THERMOSTAT:
                 # All thermostats
-                self.all_thermostats_raw[device_id] = device_name
+                self.all_thermostats_raw[device_id] = {
+                    "device_name": device_name,
+                    "address_dec": address_dec,
+                    "address_hex": address_hex,
+                }
             elif device_type == AVE_FAMILY_SCENARIO:
                 # Scenario
                 pass
@@ -703,7 +732,9 @@ class AveWebServer:
             f"thermostat_{thermostat_properties.device_id}"
         )
         if self.settings.get_entity_names:
-            thermostat_properties.device_name = self.all_thermostats_raw[device_id]
+            thermostat_properties.device_name = self.all_thermostats_raw[device_id][
+                "device_name"
+            ]
 
         self.update_thermostat(
             server=self,
@@ -712,6 +743,7 @@ class AveWebServer:
             command=None,
             properties=thermostat_properties,
             ave_device_id=device_id,
+            address_dec=self.all_thermostats_raw[device_id].get("address_dec"),
         )
         if thermostat_properties.offset is not None:
             self.update_th_offset(
@@ -720,6 +752,7 @@ class AveWebServer:
                 ave_device_id=device_id,
                 offset_value=thermostat_properties.offset,
                 name=thermostat_properties.device_name,
+                address_dec=self.all_thermostats_raw[device_id].get("address_dec"),
             )
 
     async def switch_turn_on(self, device_id: int) -> None:
