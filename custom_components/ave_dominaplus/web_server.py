@@ -20,6 +20,9 @@ from .const import (
     AVE_FAMILY_MOTION_SENSOR,
     AVE_FAMILY_ONOFFLIGHTS,
     AVE_FAMILY_SCENARIO,
+    AVE_FAMILY_SHUTTER_HUNG,
+    AVE_FAMILY_SHUTTER_ROLLING,
+    AVE_FAMILY_SHUTTER_SLIDING,
     AVE_FAMILY_THERMOSTAT,
 )
 
@@ -39,6 +42,7 @@ class AveWebServerSettings:
     fetch_sensor_areas: bool
     fetch_sensors: bool
     fetch_lights: bool
+    fetch_covers: bool
     fetch_scenarios: bool
     fetch_thermostats: bool
 
@@ -49,6 +53,7 @@ class AveWebServerSettings:
         self.fetch_sensor_areas = False
         self.fetch_sensors = False
         self.fetch_lights = False
+        self.fetch_covers = False
         self.fetch_scenarios = False
         self.fetch_thermostats = False
         self.onOffLightsAsSwitch = True
@@ -71,6 +76,7 @@ class AveWebServer:
             self.settings.fetch_sensor_areas = settings_data["fetch_sensor_areas"]
             self.settings.fetch_sensors = settings_data["fetch_sensors"]
             self.settings.fetch_lights = settings_data["fetch_lights"]
+            self.settings.fetch_covers = settings_data.get("fetch_covers", True)
             self.settings.fetch_thermostats = settings_data["fetch_thermostats"]
             self.settings.onOffLightsAsSwitch = settings_data.get(
                 "onOffLightsAsSwitch", True
@@ -96,6 +102,9 @@ class AveWebServer:
         self.lights: dict = {}  # Track dimmer lights by unique ID
         self.async_add_lg_entities: Any = None
         self.update_light: Any = None
+        self.covers: dict = {}  # Track covers by unique ID
+        self.async_add_cv_entities: Any = None
+        self.update_cover: Any = None
         self.thermostats: dict = {}  # Track thermostats by ID
         self.all_thermostats_raw: dict = {}  # Track thermostats that are not on the map by device ID
         self.async_add_th_entities: Any = None
@@ -122,6 +131,10 @@ class AveWebServer:
         """Set the set_update_light method for dimmer lights."""
         self.update_light = func
 
+    async def set_update_cover(self, func) -> None:
+        """Set the set_update_cover method for covers."""
+        self.update_cover = func
+
     async def set_update_thermostat(self, func) -> None:
         """Set the set_update_thermostat method for thermostats."""
         self.update_thermostat = func
@@ -140,6 +153,11 @@ class AveWebServer:
         """Set the async_add_entities method for dimmer lights."""
         if self.async_add_lg_entities is None:
             self.async_add_lg_entities = func
+
+    async def set_async_add_cv_entities(self, func) -> None:
+        """Set the async_add_entities method for covers."""
+        if self.async_add_cv_entities is None:
+            self.async_add_cv_entities = func
 
     async def set_async_add_th_entities(self, func) -> None:
         """Set the async_add_entities method for thermostats."""
@@ -246,6 +264,11 @@ class AveWebServer:
             # Get status by family type 1 (switches) and 2 (dimmers)
             await self.send_ws_command("GSF", [str(AVE_FAMILY_ONOFFLIGHTS)])
             await self.send_ws_command("GSF", [str(AVE_FAMILY_DIMMER)])
+
+        if self.settings.fetch_covers:
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_ROLLING)])
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_SLIDING)])
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_HUNG)])
 
         # Get status by family type 12 (motion detection areas)
         if self.settings.fetch_sensor_areas:
@@ -462,6 +485,23 @@ class AveWebServer:
             elif device_type == AVE_FAMILY_DIMMER and self.settings.fetch_lights:
                 if self.update_light is not None:
                     self.update_light(self, device_type, device_id, device_status, None)
+            elif (
+                device_type
+                in (
+                    AVE_FAMILY_SHUTTER_ROLLING,
+                    AVE_FAMILY_SHUTTER_SLIDING,
+                    AVE_FAMILY_SHUTTER_HUNG,
+                )
+                and self.settings.fetch_covers
+            ):
+                if self.update_cover is not None:
+                    self.update_cover(
+                        self,
+                        device_type,
+                        device_id,
+                        device_status,
+                        None,
+                    )
             # elif device_type in [12, 13]:
             #     _LOGGER.debug(
             #         "Received async Antitheft status update. "
@@ -650,6 +690,22 @@ class AveWebServer:
                         self, AVE_FAMILY_DIMMER, device_id, device_status, None
                     )
 
+        if parameters[0] in [
+            str(AVE_FAMILY_SHUTTER_ROLLING),
+            str(AVE_FAMILY_SHUTTER_SLIDING),
+            str(AVE_FAMILY_SHUTTER_HUNG),
+        ]:
+            for record in records:
+                device_id, device_status = int(record[0]), int(record[1])
+                if self.update_cover is not None:
+                    self.update_cover(
+                        self,
+                        int(parameters[0]),
+                        device_id,
+                        device_status,
+                        None,
+                    )
+
     def manage_ldi_li2(
         self, parameters: list[Any], records: list[list[Any]], command: str
     ) -> None:
@@ -738,6 +794,20 @@ class AveWebServer:
                         address_dec,
                     )
                 # Dimmer light
+            elif device_type in (
+                AVE_FAMILY_SHUTTER_ROLLING,
+                AVE_FAMILY_SHUTTER_SLIDING,
+                AVE_FAMILY_SHUTTER_HUNG,
+            ):
+                if self.update_cover is not None:
+                    self.update_cover(
+                        self,
+                        device_type,
+                        device_id,
+                        -1,
+                        device_name,
+                        address_dec,
+                    )
             elif device_type == AVE_FAMILY_THERMOSTAT:
                 # All thermostats
                 self.all_thermostats_raw[device_id] = {
@@ -850,6 +920,27 @@ class AveWebServer:
 
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), str(clamped_level)])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def cover_open(self, device_id: int) -> None:
+        """Open the cover."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("EAI", [str(device_id), "8"])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def cover_close(self, device_id: int) -> None:
+        """Close the cover."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("EAI", [str(device_id), "9"])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def cover_stop(self, device_id: int, command: str) -> None:
+        """Stop the cover according to AVE movement direction command."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("EAI", [str(device_id), command])
         else:
             _LOGGER.error("WebSocket is not connected")
 
