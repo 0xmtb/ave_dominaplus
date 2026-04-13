@@ -710,115 +710,119 @@ class AveWebServer:
         )
         self.raw_ldi = []
         for record in records:
-            device_id, device_name, device_type, address = (
-                int(record[0]),
-                str(record[1]),
-                int(record[2]),
-                record[3],
-            )
-            # record[3] contains the decimal representation of the address
-            address_dec = None
-            address_hex = None
-            if command == "li2":
-                try:
-                    address_dec = int(str(address).strip())
-                except Exception:
-                    _LOGGER.debug(
-                        "Failed parsing address '%s'; leaving address_dec unset",
-                        address,
-                    )
-                    address_dec = None
-                # Store address as two-digit uppercase hex string when available
-                address_hex = (
-                    format(address_dec & 0xFF, "02X") if address_dec is not None else ""
+            try:
+                device_id, device_name, device_type, address = (
+                    int(record[0]),
+                    str(record[1]),
+                    int(record[2]),
+                    record[3],
                 )
-            self.raw_ldi.append(
-                {
-                    "device_id": device_id,
-                    "device_name": device_name,
-                    "device_type": device_type,
-                    "address_dec": address_dec,
-                    "address_hex": address_hex,
-                }
-            )
-            if device_name and device_name[0] == "$":
-                # RGBW, unhandled
-                continue
-            if device_name and device_name[-1] == "$":
-                # DALI, unhandled
-                continue
-            if device_type == AVE_FAMILY_ANTITHEFT_AREA:
-                # Antitheft area
-                self.update_binary_sensor(
-                    self, AVE_FAMILY_ANTITHEFT_AREA, device_id, -1, device_name
-                )
-            elif device_type == AVE_FAMILY_KEYPAD:
-                # Keypad
-                pass
-            elif device_type == AVE_FAMILY_ONOFFLIGHTS:
-                if self.settings.onOffLightsAsSwitch:
-                    self.update_switch(
-                        self,
-                        AVE_FAMILY_ONOFFLIGHTS,
-                        device_id,
-                        -1,
-                        device_name,
-                        address_dec,
+                # record[3] contains the decimal representation of the address
+                address_dec = None
+                address_hex = None
+                if command == "li2":
+                    try:
+                        address_dec = int(str(address).strip())
+                    except Exception:
+                        _LOGGER.debug(
+                            "Failed parsing address '%s'; leaving address_dec unset",
+                            address,
+                        )
+                        address_dec = None
+                    # Store address as two-digit uppercase hex string when available
+                    address_hex = (
+                        format(address_dec & 0xFF, "02X")
+                        if address_dec is not None
+                        else ""
                     )
-                else:
+                self.raw_ldi.append(
+                    {
+                        "device_id": device_id,
+                        "device_name": device_name,
+                        "device_type": device_type,
+                        "address_dec": address_dec,
+                        "address_hex": address_hex,
+                    }
+                )
+                if device_name and device_name[0] == "$":
+                    # RGBW, unhandled
+                    continue
+                if device_name and device_name[-1] == "$":
+                    # DALI, unhandled
+                    continue
+                if device_type == AVE_FAMILY_ANTITHEFT_AREA:
+                    # Antitheft area
+                    self.update_binary_sensor(
+                        self, AVE_FAMILY_ANTITHEFT_AREA, device_id, -1, device_name
+                    )
+                elif device_type == AVE_FAMILY_KEYPAD:
+                    # Keypad
+                    pass
+                elif device_type == AVE_FAMILY_ONOFFLIGHTS:
+                    if self.settings.onOffLightsAsSwitch:
+                        self.update_switch(
+                            self,
+                            AVE_FAMILY_ONOFFLIGHTS,
+                            device_id,
+                            -1,
+                            device_name,
+                            address_dec,
+                        )
+                    else:
+                        self.update_light(
+                            self,
+                            AVE_FAMILY_ONOFFLIGHTS,
+                            device_id,
+                            -1,
+                            device_name,
+                            address_dec,
+                        )
+                    # Light
+                elif device_type == AVE_FAMILY_DIMMER:
                     self.update_light(
                         self,
-                        AVE_FAMILY_ONOFFLIGHTS,
+                        AVE_FAMILY_DIMMER,
                         device_id,
                         -1,
                         device_name,
                         address_dec,
                     )
-                # Light
-            elif device_type == AVE_FAMILY_DIMMER:
-                self.update_light(
-                    self,
-                    AVE_FAMILY_DIMMER,
-                    device_id,
-                    -1,
-                    device_name,
-                    address_dec,
-                )
-                # Dimmer light
-            elif device_type in (
-                AVE_FAMILY_SHUTTER_ROLLING,
-                AVE_FAMILY_SHUTTER_SLIDING,
-                AVE_FAMILY_SHUTTER_HUNG,
-            ):
-                self.update_cover(
-                    self,
-                    device_type,
-                    device_id,
-                    -1,
-                    device_name,
-                    address_dec,
-                )
-            elif device_type == AVE_FAMILY_THERMOSTAT:
-                # All thermostats
-                self.all_thermostats_raw[device_id] = {
-                    "device_name": device_name,
-                    "address_dec": address_dec,
-                    "address_hex": address_hex,
-                }
-            elif device_type == AVE_FAMILY_SCENARIO:
-                # Scenario
-                pass
-            elif device_type == AVE_FAMILY_CAMERA:
-                # Camera
-                pass
-            else:
-                _LOGGER.debug(
-                    "Unknown device type %s for %s, skipping",
-                    device_type,
-                    device_name,
-                )
-                continue
-
+                    # Dimmer light
+                elif device_type in (
+                    AVE_FAMILY_SHUTTER_ROLLING,
+                    AVE_FAMILY_SHUTTER_SLIDING,
+                    AVE_FAMILY_SHUTTER_HUNG,
+                ):
+                    self.update_cover(
+                        self,
+                        device_type,
+                        device_id,
+                        -1,
+                        device_name,
+                        address_dec,
+                    )
+                elif device_type == AVE_FAMILY_THERMOSTAT:
+                    # All thermostats
+                    self.all_thermostats_raw[device_id] = {
+                        "device_name": device_name,
+                        "address_dec": address_dec,
+                        "address_hex": address_hex,
+                    }
+                elif device_type == AVE_FAMILY_SCENARIO:
+                    # Scenario
+                    pass
+                elif device_type == AVE_FAMILY_CAMERA:
+                    # Camera
+                    pass
+                else:
+                    _LOGGER.debug(
+                        "Unknown device type %s for %s, skipping",
+                        device_type,
+                        device_name,
+                    )
+                    continue
+            except Exception:
+                _LOGGER.exception("Error parsing device record: %s", record)
         self._ldi_done.set()
 
     def manage_lm(self, parameters, records) -> None:
