@@ -94,7 +94,12 @@ def set_sensor_uid(webserver: AveWebServer, family, ave_device_id) -> str:
 
 
 def update_switch(
-    server: AveWebServer, family, ave_device_id, device_status, name=None
+    server: AveWebServer,
+    family,
+    ave_device_id,
+    device_status,
+    name=None,
+    address_dec=None,
 ) -> None:
     """Update switch based on the family and device status."""
     if family == AVE_FAMILY_SWITCH:
@@ -121,6 +126,8 @@ def update_switch(
             switch.set_ave_name(name)
             if not check_name_changed(server.hass, unique_id):
                 switch.set_name(name)
+        if address_dec is not None:
+            switch.set_address_dec(address_dec)
     else:
         # Create a new switch sensor
         entity_name = None
@@ -137,6 +144,7 @@ def update_switch(
             webserver=server,
             name=entity_name,
             ave_name=entity_ave_name,
+            address_dec=address_dec,
         )
 
         _LOGGER.info("Creating new switch entity %s, unique_id %s", name, unique_id)
@@ -175,6 +183,7 @@ class LightSwitch(SwitchEntity):
         webserver: AveWebServer,
         name=None,
         ave_name: str | None = None,
+        address_dec: int | None = None,
     ) -> None:
         """Initialize the motion detection sensor."""
         self._unique_id = unique_id
@@ -183,6 +192,7 @@ class LightSwitch(SwitchEntity):
         self.family = family
         self._webserver = webserver
         self._ave_name = ave_name
+        self._address_dec = address_dec
         self.hass = self._webserver.hass
 
         if is_on is not None and is_on >= 0:
@@ -230,6 +240,10 @@ class LightSwitch(SwitchEntity):
             "AVE_family": self.family,
             "AVE_device_id": self.ave_device_id,
             "AVE_name": self._ave_name,
+            "AVE address_dec": self._address_dec,
+            "AVE address_hex": format(self._address_dec & 0xFF, "02X")
+            if self._address_dec is not None
+            else "",
             "AVE webserver MAC": self._webserver.mac_address
             if self._webserver
             else None,
@@ -255,6 +269,12 @@ class LightSwitch(SwitchEntity):
         """Set the AVE name of the sensor."""
         if name is not None:
             self._ave_name = name
+            self.async_write_ha_state()
+
+    def set_address_dec(self, address_dec: int | None) -> None:
+        """Set the address_dec attribute of the sensor."""
+        if address_dec is not None and self._address_dec != address_dec:
+            self._address_dec = address_dec
             self.async_write_ha_state()
 
     def build_name(self) -> str:
