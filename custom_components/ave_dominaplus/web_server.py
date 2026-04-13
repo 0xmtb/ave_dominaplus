@@ -483,8 +483,7 @@ class AveWebServer:
                 else:
                     self.update_light(self, device_type, device_id, device_status, None)
             elif device_type == AVE_FAMILY_DIMMER and self.settings.fetch_lights:
-                if self.update_light is not None:
-                    self.update_light(self, device_type, device_id, device_status, None)
+                self.update_light(self, device_type, device_id, device_status, None)
             elif (
                 device_type
                 in (
@@ -494,14 +493,7 @@ class AveWebServer:
                 )
                 and self.settings.fetch_covers
             ):
-                if self.update_cover is not None:
-                    self.update_cover(
-                        self,
-                        device_type,
-                        device_id,
-                        device_status,
-                        None,
-                    )
+                self.update_cover(self, device_type, device_id, device_status, None)
             # elif device_type in [12, 13]:
             #     _LOGGER.debug(
             #         "Received async Antitheft status update. "
@@ -784,30 +776,28 @@ class AveWebServer:
                     )
                 # Light
             elif device_type == AVE_FAMILY_DIMMER:
-                if self.update_light is not None:
-                    self.update_light(
-                        self,
-                        AVE_FAMILY_DIMMER,
-                        device_id,
-                        -1,
-                        device_name,
-                        address_dec,
-                    )
+                self.update_light(
+                    self,
+                    AVE_FAMILY_DIMMER,
+                    device_id,
+                    -1,
+                    device_name,
+                    address_dec,
+                )
                 # Dimmer light
             elif device_type in (
                 AVE_FAMILY_SHUTTER_ROLLING,
                 AVE_FAMILY_SHUTTER_SLIDING,
                 AVE_FAMILY_SHUTTER_HUNG,
             ):
-                if self.update_cover is not None:
-                    self.update_cover(
-                        self,
-                        device_type,
-                        device_id,
-                        -1,
-                        device_name,
-                        address_dec,
-                    )
+                self.update_cover(
+                    self,
+                    device_type,
+                    device_id,
+                    -1,
+                    device_name,
+                    address_dec,
+                )
             elif device_type == AVE_FAMILY_THERMOSTAT:
                 # All thermostats
                 self.all_thermostats_raw[device_id] = {
