@@ -905,15 +905,30 @@ class AveWebServer:
         else:
             _LOGGER.error("WebSocket is not connected")
 
-    async def dimmer_set_level(self, device_id: int, level: int) -> None:
-        """Set dimmer level using AVE range 0..31."""
-        clamped_level = max(0, min(31, int(level)))
+    async def dimmer_turn_on(self, device_id: int, brightness_ave: int) -> None:
+        """Turn on the dimmer."""
+        clamped_level = max(0, min(31, int(brightness_ave)))
         if clamped_level == 0:
-            await self.switch_turn_off(device_id)
+            await self.dimmer_turn_off(device_id)
             return
 
         if self.ws_conn and not self.ws_conn.closed:
-            await self.send_ws_command("EBI", [str(device_id), str(clamped_level)])
+            await self.send_ws_command("EBI", [str(device_id), "3"])
+            await self.send_ws_command("SIL", [str(device_id)], [[clamped_level]])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def dimmer_turn_off(self, device_id: int) -> None:
+        """Turn off the dimmer."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("EBI", [str(device_id), "4"])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def dimmer_toggle(self, device_id: int) -> None:
+        """Toggle the dimmer."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("EBI", [str(device_id), "2"])
         else:
             _LOGGER.error("WebSocket is not connected")
 

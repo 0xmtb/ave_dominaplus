@@ -256,8 +256,13 @@ class DimmerLight(LightEntity):
 
     async def async_toggle(self, **kwargs: Any) -> None:
         """Toggle the light."""
-        if self._webserver:
+        if not self._webserver:
+            return
+
+        if self.family == AVE_FAMILY_ONOFFLIGHTS:
             await self._webserver.switch_toggle(self.ave_device_id)
+        elif self.family == AVE_FAMILY_DIMMER:
+            await self._webserver.dimmer_toggle(self.ave_device_id)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on, optionally setting brightness."""
@@ -271,16 +276,21 @@ class DimmerLight(LightEntity):
         if self.family == AVE_FAMILY_DIMMER:
             brightness_ha = kwargs.get(ATTR_BRIGHTNESS)
             if brightness_ha is None:
-                await self._webserver.switch_turn_on(self.ave_device_id)
+                await self._webserver.dimmer_turn_on(self.ave_device_id, 31)
                 return
 
             brightness_ave = max(1, int((int(brightness_ha) / 255) * 31))
-            await self._webserver.dimmer_set_level(self.ave_device_id, brightness_ave)
+            await self._webserver.dimmer_turn_on(self.ave_device_id, brightness_ave)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
-        if self._webserver:
+        if not self._webserver:
+            return
+
+        if self.family == AVE_FAMILY_ONOFFLIGHTS:
             await self._webserver.switch_turn_off(self.ave_device_id)
+        elif self.family == AVE_FAMILY_DIMMER:
+            await self._webserver.dimmer_turn_off(self.ave_device_id)
 
     @property
     def unique_id(self) -> str:
