@@ -8,6 +8,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
@@ -18,6 +19,7 @@ from .const import AVE_FAMILY_ANTITHEFT_AREA, AVE_FAMILY_MOTION_SENSOR, BRAND_PR
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -190,6 +192,8 @@ def check_name_changed(hass: HomeAssistant, unique_id: str) -> bool:
 
 class AveHubStatusBinarySensor(BinarySensorEntity):
     """Binary sensor for AVE dominaplus hub status."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, ws: AveWebServer, entry) -> None:
         """Initialize the binary sensor."""

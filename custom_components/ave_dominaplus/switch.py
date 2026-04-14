@@ -14,6 +14,7 @@ from .const import AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_SCENARIO, BRAND_PREFIX
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(

@@ -27,6 +27,7 @@ from .const import AVE_FAMILY_THERMOSTAT, BRAND_PREFIX
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 PRESET_SCHEDULE = "Schedule"
 PRESET_MANUAL = "Manual"

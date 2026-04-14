@@ -24,6 +24,7 @@ from .uid_v2 import build_uid, find_unique_id, parse_uid
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 COVER_FAMILIES = (
     AVE_FAMILY_SHUTTER_ROLLING,
