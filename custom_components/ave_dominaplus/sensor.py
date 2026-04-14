@@ -196,6 +196,7 @@ class ThermostatOffset(SensorEntity):
         self._webserver = webserver
         self.hass = self._webserver.hass
         self._address_dec = address_dec
+        self._pending_state_write = False
 
         if name is None:
             if webserver.settings.get_entity_names:
@@ -207,6 +208,13 @@ class ThermostatOffset(SensorEntity):
 
         if value is not None:
             self.update_value(value, first_update=True)
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity added to Home Assistant."""
+        await super().async_added_to_hass()
+        if self._pending_state_write:
+            self._pending_state_write = False
+            self.async_write_ha_state()
 
     @property
     def unique_id(self) -> str:
@@ -245,26 +253,26 @@ class ThermostatOffset(SensorEntity):
             return
         self._attr_native_value = offset_value
         if not first_update:
-            self.async_write_ha_state()
+            self._write_state_or_defer()
 
     def set_name(self, name: str | None) -> None:
         """Set the name of the sensor."""
         if name is None:
             return
         self._name = name
-        self.async_write_ha_state()
+        self._write_state_or_defer()
 
     def set_ave_name(self, name: str | None) -> None:
         """Set the AVE name of the sensor."""
         if name is not None:
             self._ave_name = name + " offset"
-            self.async_write_ha_state()
+            self._write_state_or_defer()
 
     def set_address_dec(self, address_dec: int | None) -> None:
         """Set the address_dec attribute of the sensor."""
         if address_dec is not None and self._address_dec != address_dec:
             self._address_dec = address_dec
-            self.async_write_ha_state()
+            self._write_state_or_defer()
 
     def build_name(self) -> str:
         """Build the name of the sensor based on its family and device ID."""
@@ -272,3 +280,10 @@ class ThermostatOffset(SensorEntity):
         mac = self._webserver.mac_address if self._webserver else "unknown"
         device_name = self._ave_name or self.ave_device_id
         return f"{BRAND_PREFIX} {mac} {suffix} {device_name}"
+
+    def _write_state_or_defer(self) -> None:
+        """Write state now when possible, otherwise defer until entity attach."""
+        if self.hass is None or self.entity_id is None:
+            self._pending_state_write = True
+            return
+        self.async_write_ha_state()
