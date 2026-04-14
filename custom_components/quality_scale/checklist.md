@@ -14,7 +14,7 @@
 - [x] `docs-removal-instructions` - The documentation provides removal instructions
 - [ ] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods
 - [x] `entity-unique-id` - Entities have a unique ID
-- [ ] `has-entity-name` - Entities use has_entity_name = True
+- [x] `has-entity-name` - Entities use has_entity_name = True
 - [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
 - [x] `test-before-configure` - Test a connection in the config flow
 - [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
@@ -33,7 +33,7 @@
 - [ ] `test-coverage` - Above 95% test coverage for all integration modules
 
 ## Gold
-- [ ] `devices` - The integration creates devices
+- [x] `devices` - The integration creates devices
 - [x] `diagnostics` - Implements diagnostics
 - [x] `discovery-update-info` - Integration uses discovery info to update network information
 - [x] `discovery` - Devices can be discovered
@@ -53,7 +53,7 @@
 - [ ] `icon-translations` - Entities implement icon translations
 - [x] `reconfiguration-flow` - Integrations should have a reconfigure flow
 - [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
-- [ ] `stale-devices` - Stale devices are removed
+- [x] `stale-devices` - Stale devices are removed
 
 ## Platinum
 - [x] `async-dependency` - Dependency is async
