@@ -16,9 +16,9 @@ Evidence: no custom integration service actions are registered today.
 Action: checklist can be treated as satisfied-by-scope; if service actions are introduced later, register them in async_setup and validate entry availability in the service handler.
 
 2. appropriate-polling
-Status: Missing
-Evidence: event-driven integration, but AveHubStatusBinarySensor uses async_update with polling and no explicit interval/parallels policy.
-Action: either make hub status event-driven (recommended) or add explicit polling strategy for the status entity with documented interval.
+Status: Covered
+Evidence: integration is push/event-driven; AveHubStatusBinarySensor no longer polls and now reflects live websocket connection state.
+Action: if a polling entity is introduced in the future, define and document an explicit scan interval.
 
 3. brands
 Status: Covered

@@ -196,13 +196,14 @@ class AveHubStatusBinarySensor(BinarySensorEntity):
     """Binary sensor for AVE dominaplus hub status."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_should_poll = False
 
     def __init__(self, ws: AveWebServer, entry) -> None:
         """Initialize the binary sensor."""
         self._ws = ws
         self._attr_name = "AVE Hub Status"
         self._attr_unique_id = f"ave_hub_status_{entry.entry_id}"
-        self._attr_is_on = None
 
     async def async_added_to_hass(self) -> None:
         """Handle entity added to Home Assistant."""
@@ -217,7 +218,7 @@ class AveHubStatusBinarySensor(BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return the status of the hub."""
-        return self._attr_is_on
+        return self._ws.connected
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -225,10 +226,6 @@ class AveHubStatusBinarySensor(BinarySensorEntity):
         return {
             "AVE webserver MAC": self._ws.mac_address if self._ws else None,
         }
-
-    async def async_update(self) -> None:
-        """Fetch the latest status from the web server."""
-        self._attr_is_on = await self._ws.is_connected()
 
 
 class MotionBinarySensor(BinarySensorEntity):

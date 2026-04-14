@@ -1,6 +1,6 @@
 ## Bronze
 - [x] `action-setup` - Service actions are registered in async_setup (N/A: no custom service actions)
-- [ ] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval
+- [x] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval (N/A: integration is push/event-driven and does not poll)
 - [x] `brands` - Has branding assets available for the integration
 - [x] `common-modules` - Place common patterns in common modules
 - [ ] `config-flow-test-coverage` - Full test coverage for the config flow
