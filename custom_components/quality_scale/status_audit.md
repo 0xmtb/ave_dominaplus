@@ -159,15 +159,15 @@ Action: checklist can be treated as satisfied-by-scope; if auth is introduced, a
 
 10. test-coverage
 Status: Missing
-Evidence: no integration test suite.
-Action: create tests for setup, unload, websocket parsing, entities, diagnostics, and config flow; target >95% module coverage.
+Evidence: pytest suite now exists with config flow, setup/unload, and device info tests, but broader module coverage is still below the Gold requirement target.
+Action: extend tests across runtime websocket parsing, entity platforms, and diagnostics to exceed >95% coverage.
 
 ## Gold
 
 1. devices
 Status: Covered
-Evidence: entities now provide device_info and are grouped under a stable AVE Hub device in the device registry using DOMAIN-scoped identifiers and hub MAC/config-entry fallback keys.
-Action: optional next step: split child endpoints into per-device registry devices (with via_device to hub) once naming/migration plan is defined.
+Evidence: entities provide device_info with a stable hub device plus grouped child devices linked via via_device (lighting, covers, antitheft areas, antitheft sensors, scenarios, and per-thermostat grouping).
+Action: keep grouping identifiers stable to avoid user-visible device migration churn.
 
 2. diagnostics
 Status: Covered
@@ -265,9 +265,9 @@ Evidence: no issue_registry or repair flow integration.
 Action: raise actionable repair issues for unsupported firmware/protocol mismatches and provide recovery guidance.
 
 21. stale-devices
-Status: Missing
-Evidence: device registry handling is absent, so stale device cleanup path is absent.
-Action: once device_info exists, remove stale devices automatically or implement async_remove_config_entry_device checks.
+Status: Covered
+Evidence: setup now removes orphan AVE devices from the device registry (no linked entities), and async_remove_config_entry_device allows UI removal only when a device is entity-free.
+Action: keep cleanup identifier filters stable when introducing new grouped device keys.
 
 ## Platinum
 

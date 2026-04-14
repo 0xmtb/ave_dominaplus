@@ -11,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import AVE_FAMILY_THERMOSTAT, BRAND_PREFIX
-from .device_info import build_hub_device_info
+from .device_info import build_endpoint_device_info
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
@@ -199,7 +199,12 @@ class ThermostatOffset(SensorEntity):
         self.hass = self._webserver.hass
         self._address_dec = address_dec
         self._pending_state_write = False
-        self._attr_device_info = build_hub_device_info(webserver)
+        self._attr_device_info = build_endpoint_device_info(
+            webserver,
+            family,
+            ave_device_id,
+            ave_name=ave_name,
+        )
 
         if name is None:
             if webserver.settings.get_entity_names:

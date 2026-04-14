@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.dt import utcnow
 
 from .const import AVE_FAMILY_ANTITHEFT_AREA, AVE_FAMILY_MOTION_SENSOR, BRAND_PREFIX
-from .device_info import build_hub_device_info
+from .device_info import build_endpoint_device_info, build_hub_device_info
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
@@ -256,7 +256,9 @@ class MotionBinarySensor(BinarySensorEntity):
         self._ave_name: str | None = ave_name
         self._webserver = webserver
         self.hass = hass
-        self._attr_device_info = build_hub_device_info(webserver)
+        self._attr_device_info = build_endpoint_device_info(
+            webserver, family, ave_device_id
+        )
 
         if name is None:
             self._name = self.build_name()

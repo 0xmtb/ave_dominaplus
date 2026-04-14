@@ -53,7 +53,7 @@
 - [ ] `icon-translations` - Entities implement icon translations
 - [x] `reconfiguration-flow` - Integrations should have a reconfigure flow
 - [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
-- [ ] `stale-devices` - Stale devices are removed
+- [x] `stale-devices` - Stale devices are removed
 
 ## Platinum
 - [x] `async-dependency` - Dependency is async
