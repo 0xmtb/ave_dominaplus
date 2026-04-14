@@ -18,6 +18,39 @@ from .const import (
 )
 from .web_server import AveWebServer
 
+_GROUP_LIGHTING = "lighting"
+_GROUP_COVERS = "covers"
+_GROUP_ANTITHEFT_SENSORS = "antitheft_sensors"
+_GROUP_ANTITHEFT_AREAS = "antitheft_areas"
+_GROUP_SCENARIOS = "scenarios"
+
+_FAMILY_TO_GROUP: dict[int, str] = {
+    AVE_FAMILY_ONOFFLIGHTS: _GROUP_LIGHTING,
+    AVE_FAMILY_DIMMER: _GROUP_LIGHTING,
+    AVE_FAMILY_SHUTTER_ROLLING: _GROUP_COVERS,
+    AVE_FAMILY_SHUTTER_SLIDING: _GROUP_COVERS,
+    AVE_FAMILY_SHUTTER_HUNG: _GROUP_COVERS,
+    AVE_FAMILY_MOTION_SENSOR: _GROUP_ANTITHEFT_SENSORS,
+    AVE_FAMILY_ANTITHEFT_AREA: _GROUP_ANTITHEFT_AREAS,
+    AVE_FAMILY_SCENARIO: _GROUP_SCENARIOS,
+}
+
+_GROUP_MODELS: dict[str, str] = {
+    _GROUP_LIGHTING: "AVE dominaplus lighting",
+    _GROUP_COVERS: "AVE dominaplus covers",
+    _GROUP_ANTITHEFT_SENSORS: "AVE dominaplus antitheft sensors",
+    _GROUP_ANTITHEFT_AREAS: "AVE dominaplus antitheft areas",
+    _GROUP_SCENARIOS: "AVE dominaplus scenarios",
+}
+
+_GROUP_NAMES: dict[str, str] = {
+    _GROUP_LIGHTING: "Dominaplus Lighting",
+    _GROUP_COVERS: "Dominaplus Covers",
+    _GROUP_ANTITHEFT_SENSORS: "Dominaplus Antitheft Sensors",
+    _GROUP_ANTITHEFT_AREAS: "Dominaplus Antitheft Areas",
+    _GROUP_SCENARIOS: "Dominaplus Scenarios",
+}
+
 
 def _hub_identifier(server: AveWebServer) -> str:
     """Build a stable hub identifier for the device registry."""
@@ -37,41 +70,19 @@ def _hub_device_identifier(server: AveWebServer) -> tuple[str, str]:
 
 def _endpoint_model(family: int) -> str:
     """Return an endpoint model label based on AVE family."""
-    if family in {AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER}:
-        return "AVE dominaplus lighting"
-    if family in {
-        AVE_FAMILY_SHUTTER_ROLLING,
-        AVE_FAMILY_SHUTTER_SLIDING,
-        AVE_FAMILY_SHUTTER_HUNG,
-    }:
-        return "AVE dominaplus covers"
     if family == AVE_FAMILY_THERMOSTAT:
         return "AVE dominaplus thermostat"
-    if family == AVE_FAMILY_MOTION_SENSOR:
-        return "AVE dominaplus antitheft sensors"
-    if family == AVE_FAMILY_ANTITHEFT_AREA:
-        return "AVE dominaplus antitheft areas"
-    if family == AVE_FAMILY_SCENARIO:
-        return "AVE dominaplus scenarios"
+    group = _FAMILY_TO_GROUP.get(family)
+    if group:
+        return _GROUP_MODELS[group]
     return f"AVE dominaplus endpoint family {family}"
 
 
 def _endpoint_group_key(family: int, ave_device_id: int) -> str:
     """Return stable grouping key for endpoint devices under the hub."""
-    if family in {AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER}:
-        return "lighting"
-    if family in {
-        AVE_FAMILY_SHUTTER_ROLLING,
-        AVE_FAMILY_SHUTTER_SLIDING,
-        AVE_FAMILY_SHUTTER_HUNG,
-    }:
-        return "covers"
-    if family == AVE_FAMILY_MOTION_SENSOR:
-        return "antitheft_sensors"
-    if family == AVE_FAMILY_ANTITHEFT_AREA:
-        return "antitheft_areas"
-    if family == AVE_FAMILY_SCENARIO:
-        return "scenarios"
+    group = _FAMILY_TO_GROUP.get(family)
+    if group:
+        return group
     if family == AVE_FAMILY_THERMOSTAT:
         return f"thermostat_{ave_device_id}"
     return f"family_{family}_{ave_device_id}"
@@ -96,20 +107,9 @@ def _endpoint_name(family: int, ave_device_id: int, ave_name: str | None) -> str
                 return clean_name
             return f"Thermostat {clean_name}"
         return f"Thermostat {ave_device_id}"
-    if family in {AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER}:
-        return "Dominaplus Lighting"
-    if family in {
-        AVE_FAMILY_SHUTTER_ROLLING,
-        AVE_FAMILY_SHUTTER_SLIDING,
-        AVE_FAMILY_SHUTTER_HUNG,
-    }:
-        return "Dominaplus Covers"
-    if family == AVE_FAMILY_MOTION_SENSOR:
-        return "Dominaplus Antitheft Sensors"
-    if family == AVE_FAMILY_ANTITHEFT_AREA:
-        return "Dominaplus Antitheft Areas"
-    if family == AVE_FAMILY_SCENARIO:
-        return "Dominaplus Scenarios"
+    group = _FAMILY_TO_GROUP.get(family)
+    if group:
+        return _GROUP_NAMES[group]
     return f"Dominaplus Device Family {family}"
 
 
