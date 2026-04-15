@@ -31,20 +31,16 @@ def _build_step_user_data_schema(defaults: dict[str, Any] | None = None) -> vol.
                 default=defaults.get(CONF_IP_ADDRESS, "192.168.1.10"),
             ): str,
             vol.Required(
-                "get_entities_names",
-                default=defaults.get("get_entities_names", True),
-            ): bool,
-            vol.Required(
-                "fetch_sensor_areas",
-                default=defaults.get("fetch_sensor_areas", True),
-            ): bool,
-            vol.Required(
-                "fetch_sensors",
-                default=defaults.get("fetch_sensors", True),
-            ): bool,
-            vol.Required(
                 "fetch_lights",
                 default=defaults.get("fetch_lights", True),
+            ): bool,
+            vol.Required(
+                "onOffLightsAsSwitch",
+                default=defaults.get("onOffLightsAsSwitch", True),
+            ): bool,
+            vol.Required(
+                "fetch_thermostats",
+                default=defaults.get("fetch_thermostats", True),
             ): bool,
             vol.Required(
                 "fetch_covers",
@@ -55,12 +51,16 @@ def _build_step_user_data_schema(defaults: dict[str, Any] | None = None) -> vol.
                 default=defaults.get("fetch_scenarios", True),
             ): bool,
             vol.Required(
-                "fetch_thermostats",
-                default=defaults.get("fetch_thermostats", True),
+                "fetch_sensor_areas",
+                default=defaults.get("fetch_sensor_areas", True),
             ): bool,
             vol.Required(
-                "onOffLightsAsSwitch",
-                default=defaults.get("onOffLightsAsSwitch", True),
+                "fetch_sensors",
+                default=defaults.get("fetch_sensors", True),
+            ): bool,
+            vol.Required(
+                "get_entities_names",
+                default=defaults.get("get_entities_names", True),
             ): bool,
         }
     )
