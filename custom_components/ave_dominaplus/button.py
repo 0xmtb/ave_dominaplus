@@ -11,7 +11,11 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import AVE_FAMILY_SCENARIO
-from .device_info import build_endpoint_device_info, sync_device_registry_name
+from .device_info import (
+    build_endpoint_device_info,
+    ensure_scenarios_parent_device,
+    sync_device_registry_name,
+)
 from .uid_v2 import build_uid, parse_uid
 from .web_server import AveWebServer
 
@@ -36,6 +40,8 @@ async def async_setup_entry(
     await webserver.set_update_button(update_button)
     if not webserver.settings.fetch_scenarios:
         return
+
+    ensure_scenarios_parent_device(webserver, entry.entry_id)
 
     await adopt_existing_buttons(webserver, entry)
 

@@ -11,7 +11,11 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import AVE_FAMILY_DIMMER, AVE_FAMILY_ONOFFLIGHTS
-from .device_info import build_endpoint_device_info
+from .device_info import (
+    build_endpoint_device_info,
+    ensure_lighting_parent_device,
+    sync_device_registry_name,
+)
 from .uid_v2 import build_uid, find_unique_id, parse_uid
 from .web_server import AveWebServer
 
@@ -35,6 +39,8 @@ async def async_setup_entry(
     await webserver.set_update_light(update_light)
     if not webserver.settings.fetch_lights:
         return
+
+    ensure_lighting_parent_device(webserver, entry.entry_id)
 
     await adopt_existing_lights(webserver, entry)
 
@@ -238,7 +244,10 @@ class DimmerLight(LightEntity):
         self._brightness = None
         self._pending_state_write = False
         self._attr_device_info = build_endpoint_device_info(
-            webserver, family, ave_device_id
+            webserver,
+            family,
+            ave_device_id,
+            ave_name=ave_name,
         )
 
         if self.family == AVE_FAMILY_DIMMER:
@@ -261,6 +270,7 @@ class DimmerLight(LightEntity):
         """Handle entity added to Home Assistant."""
         await super().async_added_to_hass()
         self._webserver.register_availability_entity(self)
+        self._sync_device_info()
         if self._pending_state_write:
             self._pending_state_write = False
             self.async_write_ha_state()
@@ -396,7 +406,19 @@ class DimmerLight(LightEntity):
         """Set AVE native name."""
         if name is not None:
             self._ave_name = name
+            self._sync_device_info(name)
             self._write_state_or_defer()
+
+    def _sync_device_info(self, ave_name: str | None = None) -> None:
+        """Sync device registry metadata for this light endpoint."""
+        updated_device_info = build_endpoint_device_info(
+            self._webserver,
+            self.family,
+            self.ave_device_id,
+            ave_name=ave_name if ave_name is not None else self._ave_name,
+        )
+        self._attr_device_info = updated_device_info
+        sync_device_registry_name(self.hass, updated_device_info)
 
     def set_address_dec(self, address_dec: int | None) -> None:
         """Set the AVE decimal address."""

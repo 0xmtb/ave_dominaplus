@@ -169,3 +169,24 @@ def test_switch_build_name_covers_scenario_family(hass: HomeAssistant) -> None:
     switch = LightSwitch("uid", AVE_FAMILY_SCENARIO, 33, 0, server)
 
     assert switch.name == "Scenario 33"
+
+
+def test_switch_set_ave_name_updates_device_info_name(hass: HomeAssistant) -> None:
+    """AVE name updates should refresh switch endpoint device_info display name."""
+    server = _new_server(hass)
+    switch = LightSwitch(
+        "uid",
+        AVE_FAMILY_ONOFFLIGHTS,
+        12,
+        0,
+        server,
+        name="Light 12",
+    )
+    switch.entity_id = "switch.uid"
+    switch.async_write_ha_state = Mock()
+
+    assert switch._attr_device_info.get("name") == "Light 12"
+
+    switch.set_ave_name("Kitchen")
+
+    assert switch._attr_device_info.get("name") == "Kitchen"

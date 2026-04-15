@@ -41,7 +41,9 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
     return server
 
 
-def test_update_light_creates_entity_when_address_available(hass: HomeAssistant) -> None:
+def test_update_light_creates_entity_when_address_available(
+    hass: HomeAssistant,
+) -> None:
     """A new light should be created when address_dec is available."""
     server = _new_server(hass)
 
@@ -88,7 +90,9 @@ def test_update_light_skips_when_feature_disabled(hass: HomeAssistant) -> None:
     server.async_add_lg_entities.assert_not_called()
 
 
-def test_update_light_existing_entity_uses_override_protection(hass: HomeAssistant) -> None:
+def test_update_light_existing_entity_uses_override_protection(
+    hass: HomeAssistant,
+) -> None:
     """Existing light updates should respect HA user rename protection."""
     server = _new_server(hass)
     unique_id = build_uid(server.mac_address, AVE_FAMILY_DIMMER, 5, 16)
@@ -189,6 +193,27 @@ def test_update_light_uses_default_name_when_entity_names_disabled(
     unique_id = build_uid(server.mac_address, AVE_FAMILY_DIMMER, 4, 12)
     created = server.lights[unique_id]
     assert created.name == "Dimmer 4"
+
+
+def test_light_set_ave_name_updates_device_info_name(hass: HomeAssistant) -> None:
+    """AVE name updates should refresh the endpoint device_info display name."""
+    server = _new_server(hass)
+    light = DimmerLight(
+        "uid",
+        AVE_FAMILY_ONOFFLIGHTS,
+        12,
+        0,
+        server,
+        name="Light 12",
+    )
+    light.entity_id = "light.uid"
+    light.async_write_ha_state = Mock()
+
+    assert light._attr_device_info.get("name") == "Light 12"
+
+    light.set_ave_name("Kitchen")
+
+    assert light._attr_device_info.get("name") == "Kitchen"
 
 
 async def test_dimmer_turn_on_converts_brightness_scale(hass: HomeAssistant) -> None:

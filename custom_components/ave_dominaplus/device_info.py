@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 
@@ -56,6 +57,26 @@ _GROUP_NAMES: dict[str, str] = {
     _GROUP_SCENARIOS: "Dominaplus Scenarios",
 }
 
+_PROTECTED_DEVICE_SUFFIXES = (
+    f"_{_GROUP_LIGHTING}",
+    f"_{_GROUP_COVERS}",
+    f"_{_GROUP_ANTITHEFT_SENSORS}",
+    f"_{_GROUP_ANTITHEFT_AREAS}",
+    f"_{_GROUP_SCENARIOS}",
+)
+
+
+def is_structural_parent_identifier(identifier: tuple[str, str]) -> bool:
+    """Return True when identifier belongs to a structural parent device.
+
+    Structural parents are devices used for topology/grouping (hub or parent nodes)
+    that may legitimately have no direct entities attached.
+    """
+    domain, value = identifier
+    if domain != DOMAIN:
+        return False
+    return value.startswith("hub_") or value.endswith(_PROTECTED_DEVICE_SUFFIXES)
+
 
 def _hub_identifier(server: AveWebServer) -> str:
     """Build a stable hub identifier for the device registry."""
@@ -85,6 +106,8 @@ def _endpoint_model(family: int) -> str:
 
 def _endpoint_group_key(family: int, ave_device_id: int) -> str:
     """Return stable grouping key for endpoint devices under the hub."""
+    if family in (AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER):
+        return f"light_{family}_{ave_device_id}"
     if family == AVE_FAMILY_SCENARIO:
         return f"scenario_{ave_device_id}"
     group = _FAMILY_TO_GROUP.get(family)
@@ -125,8 +148,20 @@ def _scenario_device_name(ave_device_id: int, ave_name: str | None) -> str:
     return f"Scenario {clean_name}"
 
 
+def _lighting_device_name(family: int, ave_device_id: int, ave_name: str | None) -> str:
+    """Build lighting endpoint device name from AVE name or fallback id."""
+    clean_name = _clean_ave_device_name(ave_name)
+    if clean_name:
+        return clean_name
+    if family == AVE_FAMILY_ONOFFLIGHTS:
+        return f"Light {ave_device_id}"
+    return f"Dimmer {ave_device_id}"
+
+
 def _endpoint_name(family: int, ave_device_id: int, ave_name: str | None) -> str:
     """Return a stable endpoint device name."""
+    if family in (AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER):
+        return _lighting_device_name(family, ave_device_id, ave_name)
     if family == AVE_FAMILY_THERMOSTAT:
         return _thermostat_device_name(ave_device_id, ave_name)
     if family == AVE_FAMILY_SCENARIO:
@@ -135,6 +170,16 @@ def _endpoint_name(family: int, ave_device_id: int, ave_name: str | None) -> str
     if group:
         return _GROUP_NAMES[group]
     return f"Dominaplus Device Family {family}"
+
+
+def _lighting_parent_device_identifier(server: AveWebServer) -> tuple[str, str]:
+    """Return the DeviceInfo identifier tuple for the lighting parent device."""
+    return (DOMAIN, f"endpoint_{_hub_identifier(server)}_{_GROUP_LIGHTING}")
+
+
+def _scenarios_parent_device_identifier(server: AveWebServer) -> tuple[str, str]:
+    """Return the DeviceInfo identifier tuple for the scenarios parent device."""
+    return (DOMAIN, f"endpoint_{_hub_identifier(server)}_{_GROUP_SCENARIOS}")
 
 
 def build_hub_device_info(server: AveWebServer) -> DeviceInfo:
@@ -173,14 +218,62 @@ def build_endpoint_device_info(
         f"endpoint_{_hub_identifier(server)}_{group_key}",
     )
 
+    via_device = _hub_device_identifier(server)
+    if family in (AVE_FAMILY_ONOFFLIGHTS, AVE_FAMILY_DIMMER):
+        via_device = _lighting_parent_device_identifier(server)
+    elif family == AVE_FAMILY_SCENARIO:
+        via_device = _scenarios_parent_device_identifier(server)
+
     return DeviceInfo(
         identifiers={endpoint_identifier},
         manufacturer="AVE",
         model=_endpoint_model(family),
         name=_endpoint_name(family, ave_device_id, ave_name),
-        via_device=_hub_device_identifier(server),
+        via_device=via_device,
         configuration_url=f"http://{server.settings.host}",
     )
+
+
+def ensure_lighting_parent_device(server: AveWebServer, config_entry_id: str) -> None:
+    """Ensure the shared lighting parent device exists in the device registry."""
+    if server.hass is None:
+        return
+
+    device_registry = dr.async_get(server.hass)
+    try:
+        device_registry.async_get_or_create(
+            config_entry_id=config_entry_id,
+            identifiers={_lighting_parent_device_identifier(server)},
+            manufacturer="AVE",
+            model=_GROUP_MODELS[_GROUP_LIGHTING],
+            name=_GROUP_NAMES[_GROUP_LIGHTING],
+            via_device=_hub_device_identifier(server),
+            configuration_url=f"http://{server.settings.host}",
+        )
+    except HomeAssistantError:
+        # Can happen in tests or during early setup before the entry is registered.
+        return
+
+
+def ensure_scenarios_parent_device(server: AveWebServer, config_entry_id: str) -> None:
+    """Ensure the shared scenarios parent device exists in the device registry."""
+    if server.hass is None:
+        return
+
+    device_registry = dr.async_get(server.hass)
+    try:
+        device_registry.async_get_or_create(
+            config_entry_id=config_entry_id,
+            identifiers={_scenarios_parent_device_identifier(server)},
+            manufacturer="AVE",
+            model=_GROUP_MODELS[_GROUP_SCENARIOS],
+            name=_GROUP_NAMES[_GROUP_SCENARIOS],
+            via_device=_hub_device_identifier(server),
+            configuration_url=f"http://{server.settings.host}",
+        )
+    except HomeAssistantError:
+        # Can happen in tests or during early setup before the entry is registered.
+        return
 
 
 def sync_device_registry_name(
@@ -190,7 +283,11 @@ def sync_device_registry_name(
     identifiers: set[tuple[str, str]] | None = None,
     device_registry_getter: Callable[[HomeAssistant], Any] | None = None,
 ) -> None:
-    """Sync registry device name from device_info unless user customized it."""
+    """Sync registry device metadata from device_info.
+
+    Updates the device name unless user customized it in HA, and updates
+    parent linkage (via_device) when resolvable.
+    """
     if hass is None:
         return
 
@@ -205,12 +302,25 @@ def sync_device_registry_name(
         return
 
     # Respect user-chosen device names from the HA UI.
-    if device_entry.name_by_user is not None:
-        return
-
+    updates: dict[str, Any] = {}
     resolved_name = device_info.get("name")
-    if resolved_name and device_entry.name != resolved_name:
-        device_registry.async_update_device(
-            device_id=device_entry.id,
-            name=resolved_name,
-        )
+    if (
+        device_entry.name_by_user is None
+        and resolved_name
+        and device_entry.name != resolved_name
+    ):
+        updates["name"] = resolved_name
+
+    via_identifier = device_info.get("via_device")
+    if isinstance(via_identifier, tuple) and len(via_identifier) == 2:
+        via_entry = device_registry.async_get_device(identifiers={via_identifier})
+        current_via_device_id = getattr(device_entry, "via_device_id", None)
+        if (
+            via_entry is not None
+            and via_entry.id != device_entry.id
+            and current_via_device_id != via_entry.id
+        ):
+            updates["via_device_id"] = via_entry.id
+
+    if updates:
+        device_registry.async_update_device(device_id=device_entry.id, **updates)

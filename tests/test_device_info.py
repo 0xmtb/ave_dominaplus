@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import Mock, patch
 
 from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_DIMMER,
     AVE_FAMILY_MOTION_SENSOR,
+    AVE_FAMILY_ONOFFLIGHTS,
     AVE_FAMILY_SCENARIO,
     AVE_FAMILY_THERMOSTAT,
     DOMAIN,
@@ -15,6 +17,9 @@ from custom_components.ave_dominaplus.const import (
 from custom_components.ave_dominaplus.device_info import (
     build_endpoint_device_info,
     build_hub_device_info,
+    ensure_lighting_parent_device,
+    ensure_scenarios_parent_device,
+    sync_device_registry_name,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
@@ -43,9 +48,7 @@ def test_device_info_uses_mac_identifier_and_connection() -> None:
     info = build_hub_device_info(cast(AveWebServer, server))
 
     assert info.get("identifiers") == {(DOMAIN, "hub_aa:bb:cc:dd:ee:ff")}
-    assert info.get("connections") == {
-        (CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")
-    }
+    assert info.get("connections") == {(CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")}
 
 
 def test_device_info_falls_back_to_entry_unique_id() -> None:
@@ -81,7 +84,7 @@ def test_device_info_falls_back_to_host() -> None:
 
 
 def test_endpoint_device_info_is_nested_under_hub() -> None:
-    """Endpoint devices should reference the hub with via_device."""
+    """Lighting endpoints should be child devices under shared lighting parent."""
     server = _server_stub(mac="AA:BB:CC:DD:EE:FF", host="10.0.0.99")
 
     info = build_endpoint_device_info(
@@ -90,12 +93,148 @@ def test_endpoint_device_info_is_nested_under_hub() -> None:
         ave_device_id=45,
     )
 
-    assert info.get("identifiers") == {(DOMAIN, "endpoint_aa:bb:cc:dd:ee:ff_lighting")}
-    assert info.get("via_device") == (DOMAIN, "hub_aa:bb:cc:dd:ee:ff")
-    assert info.get("name") == "Dominaplus Lighting"
+    assert info.get("identifiers") == {
+        (DOMAIN, "endpoint_aa:bb:cc:dd:ee:ff_light_2_45")
+    }
+    assert info.get("via_device") == (DOMAIN, "endpoint_aa:bb:cc:dd:ee:ff_lighting")
+    assert info.get("name") == "Dimmer 45"
     assert info.get("model") == "AVE dominaplus lighting"
     assert info.get("manufacturer") == "AVE"
     assert info.get("configuration_url") == "http://10.0.0.99"
+
+
+def test_endpoint_onoff_light_uses_own_child_identifier() -> None:
+    """On/off lights should get per-device child identifiers and names."""
+    server = _server_stub(config_entry_id="entry-123")
+
+    info = build_endpoint_device_info(
+        cast(AveWebServer, server),
+        family=AVE_FAMILY_ONOFFLIGHTS,
+        ave_device_id=11,
+    )
+
+    assert info.get("identifiers") == {(DOMAIN, "endpoint_entry-123_light_1_11")}
+    assert info.get("via_device") == (DOMAIN, "endpoint_entry-123_lighting")
+    assert info.get("name") == "Light 11"
+
+
+def test_ensure_lighting_parent_device_registers_under_hub(hass) -> None:
+    """Ensure helper creates shared lighting parent device linked to hub."""
+    server = _server_stub(mac="AA:BB:CC:DD:EE:FF", host="10.0.0.99")
+    server.hass = hass
+
+    with patch("custom_components.ave_dominaplus.device_info.dr.async_get") as get_reg:
+        registry = get_reg.return_value
+        ensure_lighting_parent_device(cast(AveWebServer, server), "entry-123")
+
+    registry.async_get_or_create.assert_called_once_with(
+        config_entry_id="entry-123",
+        identifiers={(DOMAIN, "endpoint_aa:bb:cc:dd:ee:ff_lighting")},
+        manufacturer="AVE",
+        model="AVE dominaplus lighting",
+        name="Dominaplus Lighting",
+        via_device=(DOMAIN, "hub_aa:bb:cc:dd:ee:ff"),
+        configuration_url="http://10.0.0.99",
+    )
+
+
+def test_ensure_scenarios_parent_device_registers_under_hub(hass) -> None:
+    """Ensure helper creates shared scenarios parent device linked to hub."""
+    server = _server_stub(mac="AA:BB:CC:DD:EE:FF", host="10.0.0.99")
+    server.hass = hass
+
+    with patch("custom_components.ave_dominaplus.device_info.dr.async_get") as get_reg:
+        registry = get_reg.return_value
+        ensure_scenarios_parent_device(cast(AveWebServer, server), "entry-123")
+
+    registry.async_get_or_create.assert_called_once_with(
+        config_entry_id="entry-123",
+        identifiers={(DOMAIN, "endpoint_aa:bb:cc:dd:ee:ff_scenarios")},
+        manufacturer="AVE",
+        model="AVE dominaplus scenarios",
+        name="Dominaplus Scenarios",
+        via_device=(DOMAIN, "hub_aa:bb:cc:dd:ee:ff"),
+        configuration_url="http://10.0.0.99",
+    )
+
+
+def test_sync_device_registry_name_updates_name_and_via() -> None:
+    """Shared sync helper should update device name and parent linkage."""
+    hass = object()
+    registry = SimpleNamespace()
+    child = SimpleNamespace(
+        id="child-id",
+        name="Old",
+        name_by_user=None,
+        via_device_id=None,
+    )
+    parent = SimpleNamespace(id="parent-id")
+
+    def _get_device(*, identifiers):
+        identifier = next(iter(identifiers))
+        if identifier == (DOMAIN, "endpoint_entry-123_light_2_45"):
+            return child
+        if identifier == (DOMAIN, "endpoint_entry-123_lighting"):
+            return parent
+        return None
+
+    registry.async_get_device = Mock(side_effect=_get_device)
+    registry.async_update_device = Mock()
+
+    sync_device_registry_name(
+        hass,
+        {
+            "identifiers": {(DOMAIN, "endpoint_entry-123_light_2_45")},
+            "name": "Kitchen",
+            "via_device": (DOMAIN, "endpoint_entry-123_lighting"),
+        },
+        device_registry_getter=lambda _hass: registry,
+    )
+
+    registry.async_update_device.assert_called_once_with(
+        device_id="child-id",
+        name="Kitchen",
+        via_device_id="parent-id",
+    )
+
+
+def test_sync_device_registry_name_respects_user_name_but_updates_via() -> None:
+    """User device names should be preserved while still updating parent linkage."""
+    hass = object()
+    registry = SimpleNamespace()
+    child = SimpleNamespace(
+        id="child-id",
+        name="Old",
+        name_by_user="Custom",
+        via_device_id=None,
+    )
+    parent = SimpleNamespace(id="parent-id")
+
+    def _get_device(*, identifiers):
+        identifier = next(iter(identifiers))
+        if identifier == (DOMAIN, "endpoint_entry-123_light_1_11"):
+            return child
+        if identifier == (DOMAIN, "endpoint_entry-123_lighting"):
+            return parent
+        return None
+
+    registry.async_get_device = Mock(side_effect=_get_device)
+    registry.async_update_device = Mock()
+
+    sync_device_registry_name(
+        hass,
+        {
+            "identifiers": {(DOMAIN, "endpoint_entry-123_light_1_11")},
+            "name": "Hall",
+            "via_device": (DOMAIN, "endpoint_entry-123_lighting"),
+        },
+        device_registry_getter=lambda _hass: registry,
+    )
+
+    registry.async_update_device.assert_called_once_with(
+        device_id="child-id",
+        via_device_id="parent-id",
+    )
 
 
 def test_endpoint_device_info_uses_entry_fallback_identifier() -> None:
@@ -152,9 +291,7 @@ def test_endpoint_motion_sensors_are_grouped() -> None:
         ave_device_id=44,
     )
 
-    assert info.get("identifiers") == {
-        (DOMAIN, "endpoint_entry-123_antitheft_sensors")
-    }
+    assert info.get("identifiers") == {(DOMAIN, "endpoint_entry-123_antitheft_sensors")}
     assert info.get("name") == "Dominaplus Antitheft Sensors"
 
 
@@ -169,6 +306,7 @@ def test_endpoint_scenario_name_falls_back_to_device_id() -> None:
     )
 
     assert info.get("identifiers") == {(DOMAIN, "endpoint_entry-123_scenario_29")}
+    assert info.get("via_device") == (DOMAIN, "endpoint_entry-123_scenarios")
     assert info.get("name") == "Scenario 29"
 
 

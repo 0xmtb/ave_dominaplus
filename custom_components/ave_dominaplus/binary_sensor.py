@@ -23,6 +23,7 @@ from .const import (
 from .device_info import (
     build_endpoint_device_info,
     build_hub_device_info,
+    ensure_scenarios_parent_device,
     sync_device_registry_name,
 )
 from .uid_v2 import build_uid, parse_uid
@@ -53,6 +54,8 @@ async def async_setup_entry(
         raise ConfigEntryNotReady(connection_error)
     await webserver.set_update_binary_sensor(update_binary_sensor)
     await webserver.set_async_add_bs_entities(async_add_entities)
+    if webserver.settings.fetch_scenarios:
+        ensure_scenarios_parent_device(webserver, entry.entry_id)
     await adopt_existing_sensors(webserver, entry)
     status_sensor = AveHubStatusBinarySensor(webserver, entry)
     async_add_entities([status_sensor])

@@ -14,6 +14,7 @@ from homeassistant.helpers import (
 )
 
 from .const import DOMAIN
+from .device_info import is_structural_parent_identifier
 from .web_server import AveWebServer
 
 if TYPE_CHECKING:
@@ -95,10 +96,27 @@ async def _async_cleanup_stale_devices(hass: HomeAssistant, entry: ConfigEntry) 
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
 
-    for device_entry in dr.async_entries_for_config_entry(
-        device_registry, entry.entry_id
-    ):
+    config_devices = list(
+        dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+    )
+    parent_device_ids = {
+        via_device_id
+        for device in config_devices
+        if (via_device_id := getattr(device, "via_device_id", None)) is not None
+    }
+
+    for device_entry in config_devices:
         if not any(identifier[0] == DOMAIN for identifier in device_entry.identifiers):
+            continue
+
+        if any(
+            is_structural_parent_identifier(identifier)
+            for identifier in device_entry.identifiers
+        ):
+            continue
+
+        # Keep parent devices referenced by child endpoints (via_device).
+        if device_entry.id in parent_device_ids:
             continue
 
         entities = er.async_entries_for_device(

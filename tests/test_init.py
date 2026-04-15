@@ -35,7 +35,9 @@ async def test_async_setup_entry_success(
     mock_webserver.start = AsyncMock()
 
     with (
-        patch("custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver),
+        patch(
+            "custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver
+        ),
         patch.object(
             hass.config_entries,
             "async_forward_entry_setups",
@@ -61,15 +63,17 @@ async def test_async_setup_entry_not_ready_on_auth_failure(
     mock_webserver.authenticate.return_value = False
 
     with (
-        patch("custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver),
+        patch(
+            "custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver
+        ),
         patch.object(
             hass.config_entries,
             "async_forward_entry_setups",
             new=AsyncMock(return_value=True),
         ) as forward_setups,
+        pytest.raises(ConfigEntryNotReady),
     ):
-        with pytest.raises(ConfigEntryNotReady):
-            await async_setup_entry(hass, mock_config_entry)
+        await async_setup_entry(hass, mock_config_entry)
 
     forward_setups.assert_not_awaited()
 
@@ -84,15 +88,17 @@ async def test_async_setup_entry_disconnects_on_forward_error(
     mock_webserver.disconnect = AsyncMock()
 
     with (
-        patch("custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver),
+        patch(
+            "custom_components.ave_dominaplus.AveWebServer", return_value=mock_webserver
+        ),
         patch.object(
             hass.config_entries,
             "async_forward_entry_setups",
             new=AsyncMock(side_effect=RuntimeError("forward failed")),
         ),
+        pytest.raises(RuntimeError, match="forward failed"),
     ):
-        with pytest.raises(RuntimeError, match="forward failed"):
-            await async_setup_entry(hass, mock_config_entry)
+        await async_setup_entry(hass, mock_config_entry)
 
     mock_webserver.disconnect.assert_awaited_once()
 
@@ -182,7 +188,93 @@ async def test_cleanup_stale_devices_removes_orphans(
         await _async_cleanup_stale_devices(hass, mock_config_entry)
 
     mock_device_registry.async_remove_device.assert_called_once_with("stale-device")
-    assert entries_for_device.call_count == 2
+    assert entries_for_device.call_count == 1
+
+
+async def test_cleanup_stale_devices_keeps_parent_with_children(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Cleanup should keep parent devices that have child devices via via_device_id."""
+    mock_device_registry = Mock()
+    mock_device_registry.async_remove_device = Mock()
+    mock_entity_registry = Mock()
+
+    parent_device = SimpleNamespace(
+        id="parent-device",
+        identifiers={(DOMAIN, "endpoint_entry-123_lighting")},
+        via_device_id=None,
+    )
+    child_device = SimpleNamespace(
+        id="child-device",
+        identifiers={(DOMAIN, "endpoint_entry-123_light_2_45")},
+        via_device_id="parent-device",
+    )
+
+    with (
+        patch(
+            "custom_components.ave_dominaplus.dr.async_get",
+            return_value=mock_device_registry,
+        ),
+        patch(
+            "custom_components.ave_dominaplus.er.async_get",
+            return_value=mock_entity_registry,
+        ),
+        patch(
+            "custom_components.ave_dominaplus.dr.async_entries_for_config_entry",
+            return_value=[parent_device, child_device],
+        ),
+        patch(
+            "custom_components.ave_dominaplus.er.async_entries_for_device",
+            side_effect=[[SimpleNamespace(entity_id="light.kitchen")]],
+        ) as entries_for_device,
+    ):
+        await _async_cleanup_stale_devices(hass, mock_config_entry)
+
+    mock_device_registry.async_remove_device.assert_not_called()
+    entries_for_device.assert_called_once_with(
+        mock_entity_registry,
+        "child-device",
+        include_disabled_entities=True,
+    )
+
+
+async def test_cleanup_stale_devices_keeps_structural_parent_without_children(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Cleanup should keep structural parent devices even without children."""
+    mock_device_registry = Mock()
+    mock_device_registry.async_remove_device = Mock()
+    mock_entity_registry = Mock()
+
+    lighting_parent = SimpleNamespace(
+        id="lighting-parent",
+        identifiers={(DOMAIN, "endpoint_entry-123_lighting")},
+        via_device_id=None,
+    )
+
+    with (
+        patch(
+            "custom_components.ave_dominaplus.dr.async_get",
+            return_value=mock_device_registry,
+        ),
+        patch(
+            "custom_components.ave_dominaplus.er.async_get",
+            return_value=mock_entity_registry,
+        ),
+        patch(
+            "custom_components.ave_dominaplus.dr.async_entries_for_config_entry",
+            return_value=[lighting_parent],
+        ),
+        patch(
+            "custom_components.ave_dominaplus.er.async_entries_for_device",
+        ) as entries_for_device,
+    ):
+        await _async_cleanup_stale_devices(hass, mock_config_entry)
+
+    mock_device_registry.async_remove_device.assert_not_called()
+    entries_for_device.assert_not_called()
 
 
 async def test_async_remove_config_entry_device_only_allows_empty_device(
