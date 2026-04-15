@@ -83,6 +83,7 @@ async def async_get_config_entry_diagnostics(
             "entity_counts": {
                 "binary_sensors": len(webserver.binary_sensors),
                 "switches": len(webserver.switches),
+                "buttons": len(webserver.buttons),
                 "lights": len(webserver.lights),
                 "covers": len(webserver.covers),
                 "thermostats": len(webserver.thermostats),
@@ -94,6 +95,7 @@ async def async_get_config_entry_diagnostics(
                 "fetch_sensors": webserver.settings.fetch_sensors,
                 "fetch_lights": webserver.settings.fetch_lights,
                 "fetch_covers": webserver.settings.fetch_covers,
+                "fetch_scenarios": webserver.settings.fetch_scenarios,
                 "fetch_thermostats": webserver.settings.fetch_thermostats,
             },
             "thermostat_flow": {

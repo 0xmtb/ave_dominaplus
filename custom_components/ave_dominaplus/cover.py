@@ -70,8 +70,11 @@ async def adopt_existing_covers(server: AveWebServer, entry: ConfigEntry) -> Non
                 parsed_uid = parse_uid(entity.unique_id)
                 if parsed_uid is None:
                     continue
-                uid_mac, family, ave_device_id, ave_address_dec = parsed_uid
+                uid_mac, family, ave_device_id, ave_address_dec, uid_suffix = parsed_uid
             except ValueError:
+                continue
+
+            if uid_suffix is not None:
                 continue
 
             if uid_mac and server.mac_address and uid_mac != server.mac_address:

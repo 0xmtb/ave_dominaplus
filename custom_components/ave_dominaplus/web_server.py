@@ -56,7 +56,7 @@ class AveWebServerSettings:
         self.fetch_sensors = False
         self.fetch_lights = False
         self.fetch_covers = False
-        self.fetch_scenarios = False
+        self.fetch_scenarios = True
         self.fetch_thermostats = False
         self.onOffLightsAsSwitch = True
 
@@ -79,6 +79,7 @@ class AveWebServer:
             self.settings.fetch_sensors = settings_data["fetch_sensors"]
             self.settings.fetch_lights = settings_data["fetch_lights"]
             self.settings.fetch_covers = settings_data.get("fetch_covers", True)
+            self.settings.fetch_scenarios = settings_data.get("fetch_scenarios", True)
             self.settings.fetch_thermostats = settings_data["fetch_thermostats"]
             self.settings.onOffLightsAsSwitch = settings_data.get(
                 "onOffLightsAsSwitch", True
@@ -107,6 +108,9 @@ class AveWebServer:
         self.switches: dict = {}  # Track switches by unique ID
         self.async_add_sw_entities: Any = None
         self.update_switch: Any = None
+        self.buttons: dict = {}  # Track buttons by unique ID
+        self.async_add_bt_entities: Any = None
+        self.update_button: Any = None
         self.lights: dict = {}  # Track dimmer lights by unique ID
         self.async_add_lg_entities: Any = None
         self.update_light: Any = None
@@ -135,6 +139,10 @@ class AveWebServer:
         """Set the set_update_switch method for switches."""
         self.update_switch = func
 
+    async def set_update_button(self, func) -> None:
+        """Set the set_update_button method for buttons."""
+        self.update_button = func
+
     async def set_update_light(self, func) -> None:
         """Set the set_update_light method for dimmer lights."""
         self.update_light = func
@@ -156,6 +164,11 @@ class AveWebServer:
         """Set the async_add_entities method for switches."""
         if self.async_add_sw_entities is None:
             self.async_add_sw_entities = func
+
+    async def set_async_add_bt_entities(self, func) -> None:
+        """Set the async_add_entities method for buttons."""
+        if self.async_add_bt_entities is None:
+            self.async_add_bt_entities = func
 
     async def set_async_add_lg_entities(self, func) -> None:
         """Set the async_add_entities method for dimmer lights."""
@@ -205,6 +218,7 @@ class AveWebServer:
         for collection in (
             self.binary_sensors,
             self.switches,
+            self.buttons,
             self.lights,
             self.covers,
             self.thermostats,
@@ -388,6 +402,9 @@ class AveWebServer:
             await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_ROLLING)])
             await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_SLIDING)])
             await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_HUNG)])
+
+        if self.settings.fetch_scenarios:
+            await self.send_ws_command("GSF", [str(AVE_FAMILY_SCENARIO)])
 
         # Get status by family type 12 (motion detection areas)
         if self.settings.fetch_sensor_areas:
@@ -626,6 +643,10 @@ class AveWebServer:
                 and self.settings.fetch_covers
             ):
                 self.update_cover(self, device_type, device_id, device_status, None)
+            elif device_type == AVE_FAMILY_SCENARIO and self.settings.fetch_scenarios:
+                self.update_binary_sensor(
+                    self, AVE_FAMILY_SCENARIO, device_id, device_status, None
+                )
             # elif device_type in [12, 13]:
             #     _LOGGER.debug(
             #         "Received async Antitheft status update. "
@@ -790,6 +811,18 @@ class AveWebServer:
                         None,
                     )
 
+        if parameters[0] == str(AVE_FAMILY_SCENARIO):
+            for record in records:
+                device_id, device_status = int(record[0]), int(record[1])
+                if self.update_binary_sensor is not None:
+                    self.update_binary_sensor(
+                        self,
+                        AVE_FAMILY_SCENARIO,
+                        device_id,
+                        device_status,
+                        None,
+                    )
+
     def manage_ldi_li2(
         self, parameters: list[Any], records: list[list[Any]], command: str
     ) -> None:
@@ -902,7 +935,23 @@ class AveWebServer:
                     }
                 elif device_type == AVE_FAMILY_SCENARIO:
                     # Scenario
-                    pass
+                    if self.settings.fetch_scenarios:
+                        if self.update_button is not None:
+                            self.update_button(
+                                self,
+                                AVE_FAMILY_SCENARIO,
+                                device_id,
+                                device_name,
+                                address_dec,
+                            )
+                        if self.update_binary_sensor is not None:
+                            self.update_binary_sensor(
+                                self,
+                                AVE_FAMILY_SCENARIO,
+                                device_id,
+                                -1,
+                                device_name,
+                            )
                 elif device_type == AVE_FAMILY_CAMERA:
                     # Camera
                     pass
@@ -994,6 +1043,13 @@ class AveWebServer:
         """Toggle the switch."""
         if self.ws_conn and not self.ws_conn.closed:
             await self.send_ws_command("EBI", [str(device_id), "10"])
+        else:
+            _LOGGER.error("WebSocket is not connected")
+
+    async def scenario_execute(self, device_id: int) -> None:
+        """Execute a scenario."""
+        if self.ws_conn and not self.ws_conn.closed:
+            await self.send_ws_command("ESI", [str(device_id), "0"])
         else:
             _LOGGER.error("WebSocket is not connected")
 

@@ -7,31 +7,48 @@ from custom_components.ave_dominaplus.uid_v2 import build_uid, find_unique_id, p
 
 def test_build_uid_formats_hex_address() -> None:
     """build_uid should include uppercase two-digit hexadecimal address."""
-    assert build_uid("aa:bb:cc:dd:ee:ff", 2, 10, 15) == "ave_aa:bb:cc:dd:ee:ff_family_2_10_0x0F"
+    assert (
+        build_uid("aa:bb:cc:dd:ee:ff", 2, 10, 15)
+        == "ave_aa:bb:cc:dd:ee:ff_family_2_10_0x0F"
+    )
+
+
+def test_build_uid_appends_suffix_when_provided() -> None:
+    """build_uid should append suffix segment when provided."""
+    assert (
+        build_uid("aa:bb:cc:dd:ee:ff", 6, 10, 0, suffix="button")
+        == "ave_aa:bb:cc:dd:ee:ff_family_6_10_0x00_button"
+    )
 
 
 def test_parse_uid_with_hex_address() -> None:
     """parse_uid should decode mac/family/device/address from hexadecimal form."""
     parsed = parse_uid("ave_aa:bb:cc:dd:ee:ff_family_2_10_0x1A")
-    assert parsed == ("aa:bb:cc:dd:ee:ff", 2, 10, 26)
+    assert parsed == ("aa:bb:cc:dd:ee:ff", 2, 10, 26, None)
 
 
 def test_parse_uid_with_decimal_address() -> None:
     """parse_uid should decode decimal address if present as decimal text."""
     parsed = parse_uid("ave_aa:bb:cc:dd:ee:ff_family_2_10_26")
-    assert parsed == ("aa:bb:cc:dd:ee:ff", 2, 10, 26)
+    assert parsed == ("aa:bb:cc:dd:ee:ff", 2, 10, 26, None)
 
 
-def test_parse_uid_without_address() -> None:
-    """parse_uid should allow UIDs without address segment."""
-    parsed = parse_uid("ave_aa:bb:cc:dd:ee:ff_family_2_10")
-    assert parsed == ("aa:bb:cc:dd:ee:ff", 2, 10, None)
+def test_parse_uid_without_address_returns_none() -> None:
+    """parse_uid should return None for UIDs missing the address segment."""
+    assert parse_uid("ave_aa:bb:cc:dd:ee:ff_family_2_10") is None
+
+
+def test_parse_uid_with_suffix() -> None:
+    """parse_uid should decode suffix when present."""
+    parsed = parse_uid("ave_aa:bb:cc:dd:ee:ff_family_6_10_0x00_running")
+    assert parsed == ("aa:bb:cc:dd:ee:ff", 6, 10, 0, "running")
 
 
 def test_parse_uid_returns_none_for_invalid_strings() -> None:
     """parse_uid should return None when the UID cannot be parsed."""
     assert parse_uid("ave_invalid") is None
     assert parse_uid("ave_x_family_notint_10") is None
+    assert parse_uid("ave_aa:bb:cc:dd:ee:ff_family_2_10_button") is None
 
 
 def test_find_unique_id_matches_family_and_device() -> None:

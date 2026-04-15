@@ -11,6 +11,7 @@
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "fetch_covers": "Importa le tapparelle",
+          "fetch_scenarios": "Importa gli scenari",
           "onOffLightsAsSwitch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati"
         },
@@ -19,6 +20,7 @@
           "get_entities_names": "Usa nomi e identificativi entità configurati nel sistema Domina Plus.",
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
+          "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "onOffLightsAsSwitch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
         }
       },
@@ -32,6 +34,7 @@
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "fetch_covers": "Importa le tapparelle",
+          "fetch_scenarios": "Importa gli scenari",
           "onOffLightsAsSwitch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati"
         },
@@ -40,6 +43,7 @@
           "get_entities_names": "Usa nomi e identificativi entità configurati nel sistema Domina Plus.",
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
+          "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "onOffLightsAsSwitch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
         }
       },
@@ -57,6 +61,7 @@
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "fetch_covers": "Importa le tapparelle",
+          "fetch_scenarios": "Importa gli scenari",
           "onOffLightsAsSwitch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati"
         },
@@ -65,6 +70,7 @@
           "get_entities_names": "Usa nomi e identificativi entità configurati nel sistema Domina Plus.",
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
+          "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "onOffLightsAsSwitch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
         }
       }

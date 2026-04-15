@@ -18,6 +18,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -43,11 +44,14 @@ async def test_on_connect_actions_sends_expected_bootstrap_commands(
     server.send_ws_command.assert_any_await("GSF", ["1"])
     server.send_ws_command.assert_any_await("GSF", ["2"])
     server.send_ws_command.assert_any_await("GSF", ["3"])
+    server.send_ws_command.assert_any_await("GSF", ["6"])
     server.send_ws_command.assert_any_await("WSF", ["12"])
     server._start_thermostats_fetch_flow.assert_awaited_once()
 
 
-async def test_on_connect_actions_stops_when_ldi_wait_fails(hass: HomeAssistant) -> None:
+async def test_on_connect_actions_stops_when_ldi_wait_fails(
+    hass: HomeAssistant,
+) -> None:
     """Bootstrap should stop early if device list does not arrive in time."""
     server = _new_server(hass)
     server.ws_conn = SimpleNamespace(closed=False)

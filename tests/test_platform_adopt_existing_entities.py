@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from custom_components.ave_dominaplus import (
     binary_sensor,
+    button,
     climate,
     cover,
     light,
@@ -17,6 +18,7 @@ from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_DIMMER,
     AVE_FAMILY_MOTION_SENSOR,
     AVE_FAMILY_ONOFFLIGHTS,
+    AVE_FAMILY_SCENARIO,
     AVE_FAMILY_SHUTTER_ROLLING,
     AVE_FAMILY_THERMOSTAT,
 )
@@ -35,6 +37,7 @@ def _new_server(hass: HomeAssistant) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -43,6 +46,7 @@ def _new_server(hass: HomeAssistant) -> AveWebServer:
     server.async_add_lg_entities = Mock()
     server.async_add_cv_entities = Mock()
     server.async_add_sw_entities = Mock()
+    server.async_add_bt_entities = Mock()
     server.async_add_bs_entities = Mock()
     server.async_add_th_entities = Mock()
     server.async_add_number_entities = Mock()
@@ -64,7 +68,9 @@ async def test_adopt_existing_light_adds_entity(hass: HomeAssistant) -> None:
     )
 
     with (
-        patch("custom_components.ave_dominaplus.light.er.async_get", return_value=object()),
+        patch(
+            "custom_components.ave_dominaplus.light.er.async_get", return_value=object()
+        ),
         patch(
             "custom_components.ave_dominaplus.light.er.async_entries_for_config_entry",
             return_value=[entity],
@@ -91,7 +97,9 @@ async def test_adopt_existing_cover_adds_entity(hass: HomeAssistant) -> None:
     )
 
     with (
-        patch("custom_components.ave_dominaplus.cover.er.async_get", return_value=object()),
+        patch(
+            "custom_components.ave_dominaplus.cover.er.async_get", return_value=object()
+        ),
         patch(
             "custom_components.ave_dominaplus.cover.er.async_entries_for_config_entry",
             return_value=[entity],
@@ -118,7 +126,10 @@ async def test_adopt_existing_switch_adds_entity(hass: HomeAssistant) -> None:
     )
 
     with (
-        patch("custom_components.ave_dominaplus.switch.er.async_get", return_value=object()),
+        patch(
+            "custom_components.ave_dominaplus.switch.er.async_get",
+            return_value=object(),
+        ),
         patch(
             "custom_components.ave_dominaplus.switch.er.async_entries_for_config_entry",
             return_value=[entity],
@@ -128,6 +139,42 @@ async def test_adopt_existing_switch_adds_entity(hass: HomeAssistant) -> None:
 
     assert unique_id in server.switches
     server.async_add_sw_entities.assert_called_once()
+
+
+async def test_adopt_existing_button_adds_entity(hass: HomeAssistant) -> None:
+    """Button adopter should restore scenario button entities from registry."""
+    server = _new_server(hass)
+    entry = SimpleNamespace(entry_id="entry-1")
+    unique_id = build_uid(
+        server.mac_address,
+        AVE_FAMILY_SCENARIO,
+        4,
+        0,
+        suffix="button",
+    )
+    entity = SimpleNamespace(
+        platform="ave_dominaplus",
+        domain="button",
+        unique_id=unique_id,
+        name="Legacy scenario run",
+        original_name=None,
+        entity_id="button.legacy_scenario",
+    )
+
+    with (
+        patch(
+            "custom_components.ave_dominaplus.button.er.async_get",
+            return_value=object(),
+        ),
+        patch(
+            "custom_components.ave_dominaplus.button.er.async_entries_for_config_entry",
+            return_value=[entity],
+        ),
+    ):
+        await button.adopt_existing_buttons(server, entry)
+
+    assert unique_id in server.buttons
+    server.async_add_bt_entities.assert_called_once()
 
 
 async def test_adopt_existing_binary_sensor_adds_motion_entity(
@@ -145,6 +192,45 @@ async def test_adopt_existing_binary_sensor_adds_motion_entity(
         name="Motion 6",
         original_name=None,
         entity_id="binary_sensor.motion_6",
+    )
+
+    with (
+        patch(
+            "custom_components.ave_dominaplus.binary_sensor.er.async_get",
+            return_value=object(),
+        ),
+        patch(
+            "custom_components.ave_dominaplus.binary_sensor.er.async_entries_for_config_entry",
+            return_value=[entity],
+        ),
+    ):
+        await binary_sensor.adopt_existing_sensors(server, entry)
+
+    assert unique_id in server.binary_sensors
+    server.async_add_bs_entities.assert_called_once()
+
+
+async def test_adopt_existing_binary_sensor_adds_scenario_running_entity(
+    hass: HomeAssistant,
+) -> None:
+    """Binary sensor adopter should restore scenario running entities when enabled."""
+    server = _new_server(hass)
+    entry = SimpleNamespace(entry_id="entry-1")
+    unique_id = build_uid(
+        server.mac_address,
+        AVE_FAMILY_SCENARIO,
+        6,
+        0,
+        suffix="running",
+    )
+    entity = SimpleNamespace(
+        platform="ave_dominaplus",
+        domain="binary_sensor",
+        original_device_class="running",
+        unique_id=unique_id,
+        name="Scenario 6 Running",
+        original_name=None,
+        entity_id="binary_sensor.scenario_6_running",
     )
 
     with (

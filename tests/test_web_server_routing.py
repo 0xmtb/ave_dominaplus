@@ -10,6 +10,7 @@ from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_DIMMER,
     AVE_FAMILY_MOTION_SENSOR,
     AVE_FAMILY_ONOFFLIGHTS,
+    AVE_FAMILY_SCENARIO,
     AVE_FAMILY_SHUTTER_ROLLING,
     AVE_FAMILY_THERMOSTAT,
 )
@@ -26,6 +27,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -36,6 +38,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
 def _wire_callbacks(server: AveWebServer) -> None:
     """Wire all update callbacks with mocks for routing assertions."""
     server.update_switch = Mock()
+    server.update_button = Mock()
     server.update_light = Mock()
     server.update_cover = Mock()
     server.update_binary_sensor = Mock()
@@ -88,6 +91,18 @@ def test_manage_upd_routes_cover_family_to_cover(hass: HomeAssistant) -> None:
 
     server.update_cover.assert_called_once_with(
         server, AVE_FAMILY_SHUTTER_ROLLING, 21, 2, None
+    )
+
+
+def test_manage_upd_routes_scenario_to_binary_sensor(hass: HomeAssistant) -> None:
+    """Scenario WS updates route to running binary sensor callback."""
+    server = _new_server(hass, fetch_scenarios=True)
+    _wire_callbacks(server)
+
+    server.manage_upd(["WS", "6", "31", "1"], [])
+
+    server.update_binary_sensor.assert_called_once_with(
+        server, AVE_FAMILY_SCENARIO, 31, 1, None
     )
 
 
@@ -207,7 +222,32 @@ def test_manage_ldi_li2_routes_onoff_with_address(hass: HomeAssistant) -> None:
     assert server._ldi_done.is_set()
 
 
-def test_manage_ldi_li2_handles_bad_records_without_raising(hass: HomeAssistant) -> None:
+def test_manage_ldi_li2_routes_scenario_button_and_sensor(hass: HomeAssistant) -> None:
+    """LI2 scenario records should create both button and running sensor entities."""
+    server = _new_server(hass)
+    _wire_callbacks(server)
+
+    server.manage_ldi_li2([], [["200", "Evening", "6", "21"]], "li2")
+
+    server.update_button.assert_called_once_with(
+        server,
+        AVE_FAMILY_SCENARIO,
+        200,
+        "Evening",
+        21,
+    )
+    server.update_binary_sensor.assert_called_once_with(
+        server,
+        AVE_FAMILY_SCENARIO,
+        200,
+        -1,
+        "Evening",
+    )
+
+
+def test_manage_ldi_li2_handles_bad_records_without_raising(
+    hass: HomeAssistant,
+) -> None:
     """Malformed LDI/LI2 records are handled and do not abort processing."""
     server = _new_server(hass)
     _wire_callbacks(server)

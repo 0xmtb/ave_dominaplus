@@ -20,6 +20,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -48,6 +49,19 @@ async def test_switch_and_cover_commands_dispatch_when_connected(
     server.send_ws_command.assert_any_await("EAI", ["8", "8"])
     server.send_ws_command.assert_any_await("EAI", ["8", "9"])
     assert server.send_ws_command.await_count == 6
+
+
+async def test_scenario_execute_dispatches_when_connected(
+    hass: HomeAssistant,
+) -> None:
+    """Scenario execution helper should dispatch ESI websocket command."""
+    server = _new_server(hass)
+    server.ws_conn = SimpleNamespace(closed=False)
+    server.send_ws_command = AsyncMock()
+
+    await server.scenario_execute(15)
+
+    server.send_ws_command.assert_awaited_once_with("ESI", ["15", "0"])
 
 
 async def test_dimmer_turn_on_clamps_and_dispatches(hass: HomeAssistant) -> None:

@@ -18,6 +18,7 @@ def make_server(hass: HomeAssistant, **overrides: object) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }

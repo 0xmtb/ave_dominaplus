@@ -42,7 +42,9 @@ class _FakeResponse:
 class _FakeSession:
     """Minimal async-context session for aiohttp helper tests."""
 
-    def __init__(self, response: _FakeResponse | None = None, exc: Exception | None = None):
+    def __init__(
+        self, response: _FakeResponse | None = None, exc: Exception | None = None
+    ):
         self._response = response
         self._exc = exc
 
@@ -79,6 +81,7 @@ async def test_setter_helpers_assign_callbacks_and_keep_first_adders(
 
     await server.set_update_binary_sensor(first)
     await server.set_update_switch(first)
+    await server.set_update_button(first)
     await server.set_update_light(first)
     await server.set_update_cover(first)
     await server.set_update_thermostat(first)
@@ -89,6 +92,8 @@ async def test_setter_helpers_assign_callbacks_and_keep_first_adders(
     await server.set_async_add_bs_entities(second)
     await server.set_async_add_sw_entities(first)
     await server.set_async_add_sw_entities(second)
+    await server.set_async_add_bt_entities(first)
+    await server.set_async_add_bt_entities(second)
     await server.set_async_add_lg_entities(first)
     await server.set_async_add_lg_entities(second)
     await server.set_async_add_cv_entities(first)
@@ -101,12 +106,14 @@ async def test_setter_helpers_assign_callbacks_and_keep_first_adders(
 
     assert server.update_binary_sensor is first
     assert server.update_switch is first
+    assert server.update_button is first
     assert server.update_light is first
     assert server.update_cover is first
     assert server.update_thermostat is first
     assert server.update_th_offset is first
     assert server.async_add_bs_entities is first
     assert server.async_add_sw_entities is first
+    assert server.async_add_bt_entities is first
     assert server.async_add_lg_entities is first
     assert server.async_add_cv_entities is first
     assert server.async_add_th_entities is first
@@ -334,6 +341,7 @@ def test_manage_ldi_li2_covers_special_names_types_and_bad_address(
     """LI2 parser should handle special names, passthrough types, and bad addresses."""
     server = make_server(hass, onOffLightsAsSwitch=False)
     server.update_binary_sensor = Mock()
+    server.update_button = Mock()
     server.update_switch = Mock()
     server.update_light = Mock()
     server.update_cover = Mock()
@@ -354,8 +362,14 @@ def test_manage_ldi_li2_covers_special_names_types_and_bad_address(
 
     server.manage_ldi_li2([], records, "li2")
 
-    server.update_binary_sensor.assert_called_once_with(
+    server.update_binary_sensor.assert_any_call(
         server, AVE_FAMILY_ANTITHEFT_AREA, 3, -1, "Area"
+    )
+    server.update_binary_sensor.assert_any_call(
+        server, AVE_FAMILY_SCENARIO, 9, -1, "Scene"
+    )
+    server.update_button.assert_called_once_with(
+        server, AVE_FAMILY_SCENARIO, 9, "Scene", 13
     )
     server.update_switch.assert_not_called()
     assert server.update_light.call_count == 2

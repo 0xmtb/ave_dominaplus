@@ -80,6 +80,8 @@ def _endpoint_model(family: int) -> str:
 
 def _endpoint_group_key(family: int, ave_device_id: int) -> str:
     """Return stable grouping key for endpoint devices under the hub."""
+    if family == AVE_FAMILY_SCENARIO:
+        return f"scenario_{ave_device_id}"
     group = _FAMILY_TO_GROUP.get(family)
     if group:
         return group
@@ -112,6 +114,13 @@ def _endpoint_name(family: int, ave_device_id: int, ave_name: str | None) -> str
     """Return a stable endpoint device name."""
     if family == AVE_FAMILY_THERMOSTAT:
         return _thermostat_device_name(ave_device_id, ave_name)
+    if family == AVE_FAMILY_SCENARIO:
+        clean_name = _clean_ave_device_name(ave_name)
+        if not clean_name:
+            return f"Scenario {ave_device_id}"
+        if clean_name.lower().startswith("scenario "):
+            return clean_name
+        return f"Scenario {clean_name}"
     group = _FAMILY_TO_GROUP.get(family)
     if group:
         return _GROUP_NAMES[group]

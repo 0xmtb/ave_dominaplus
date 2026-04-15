@@ -9,6 +9,7 @@ import pytest
 
 from custom_components.ave_dominaplus import (
     binary_sensor,
+    button,
     climate,
     cover,
     light,
@@ -29,6 +30,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -42,6 +44,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         light.async_setup_entry,
         cover.async_setup_entry,
         switch.async_setup_entry,
+        button.async_setup_entry,
         sensor.async_setup_entry,
         binary_sensor.async_setup_entry,
         climate.async_setup_entry,
@@ -114,6 +117,45 @@ async def test_switch_setup_entry_skips_adoption_when_lights_disabled(
     adopt.assert_not_awaited()
 
 
+async def test_button_setup_entry_registers_callbacks_and_adopts(
+    hass: HomeAssistant,
+) -> None:
+    """Button setup should register callbacks and adopt existing button entities."""
+    server = _new_server(hass, fetch_scenarios=True)
+    server.set_async_add_bt_entities = AsyncMock()
+    server.set_update_button = AsyncMock()
+    entry = SimpleNamespace(runtime_data=server, entry_id="entry-1")
+    async_add = Mock()
+
+    with patch(
+        "custom_components.ave_dominaplus.button.adopt_existing_buttons",
+        new=AsyncMock(),
+    ) as adopt:
+        await button.async_setup_entry(None, entry, async_add)
+
+    server.set_async_add_bt_entities.assert_awaited_once_with(async_add)
+    server.set_update_button.assert_awaited_once_with(button.update_button)
+    adopt.assert_awaited_once_with(server, entry)
+
+
+async def test_button_setup_entry_skips_adoption_when_scenarios_disabled(
+    hass: HomeAssistant,
+) -> None:
+    """Button setup should skip adoption when scenario fetching is disabled."""
+    server = _new_server(hass, fetch_scenarios=False)
+    server.set_async_add_bt_entities = AsyncMock()
+    server.set_update_button = AsyncMock()
+    entry = SimpleNamespace(runtime_data=server, entry_id="entry-1")
+
+    with patch(
+        "custom_components.ave_dominaplus.button.adopt_existing_buttons",
+        new=AsyncMock(),
+    ) as adopt:
+        await button.async_setup_entry(None, entry, Mock())
+
+    adopt.assert_not_awaited()
+
+
 async def test_sensor_setup_entry_skips_adoption_when_thermostats_disabled(
     hass: HomeAssistant,
 ) -> None:
@@ -177,7 +219,9 @@ async def test_adopt_existing_light_returns_when_registry_missing(
     server = _new_server(hass)
     entry = SimpleNamespace(entry_id="entry-1")
 
-    with patch("custom_components.ave_dominaplus.light.er.async_get", return_value=None):
+    with patch(
+        "custom_components.ave_dominaplus.light.er.async_get", return_value=None
+    ):
         await light.adopt_existing_lights(server, entry)
 
 
@@ -188,5 +232,7 @@ async def test_adopt_existing_cover_returns_when_registry_missing(
     server = _new_server(hass)
     entry = SimpleNamespace(entry_id="entry-1")
 
-    with patch("custom_components.ave_dominaplus.cover.er.async_get", return_value=None):
+    with patch(
+        "custom_components.ave_dominaplus.cover.er.async_get", return_value=None
+    ):
         await cover.adopt_existing_covers(server, entry)

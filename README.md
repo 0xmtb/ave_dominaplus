@@ -104,6 +104,12 @@ The integration assumes:
   physical thermostat itself.  The sensor simply mirrors the value reported
   by the device.
 
+### ✅ Scenarios
+- Discovered at startup from `LI2` when **"Get scenarios"** is enabled.
+- Each scenario gets its own device in Home Assistant with two entities:
+  * a **button** entity to execute the scenario
+  * a **binary_sensor** entity reporting whether the scenario is currently running
+
 ---
 
 ## 🔜 Not yet supported (contributors welcome!)
@@ -111,7 +117,6 @@ The integration assumes:
 Other devices are not yet supported either for lack of time or lack of devices at hand
 
 - **RGB Lights**
-- **Scenarios**: Backend discovery is ready; no entity is exposed
 - **Areas**: Feel free to come with a plan to add AVE areas and device area assignments without clashing with the HA areas
 - **Economizers**: Not yet supported
 - **Metered outlets**: Not yet supported

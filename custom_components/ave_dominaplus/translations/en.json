@@ -11,6 +11,7 @@
           "fetch_sensors": "Get individual antitheft sensors",
           "fetch_lights": "Get lights",
           "fetch_covers": "Get covers",
+          "fetch_scenarios": "Get scenarios",
           "onOffLightsAsSwitch": "On/Off lights as switches",
           "fetch_thermostats": "Get thermostats"
         },
@@ -19,6 +20,7 @@
           "get_entities_names": "Will use the entities names and IDs as set in the Domina Plus system.",
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
+          "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
           "onOffLightsAsSwitch": "Use simple switch entities for On/Off lights (AVE family 1)."
         }
       },
@@ -32,6 +34,7 @@
           "fetch_sensors": "Get individual antitheft sensors",
           "fetch_lights": "Get lights",
           "fetch_covers": "Get covers",
+          "fetch_scenarios": "Get scenarios",
           "onOffLightsAsSwitch": "On/Off lights as switches",
           "fetch_thermostats": "Get thermostats"
         },
@@ -40,6 +43,7 @@
           "get_entities_names": "Will use the entities names and IDs as set in the Domina Plus system.",
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
+          "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
           "onOffLightsAsSwitch": "Use simple switch entities for On/Off lights (AVE family 1)."
         }
       },
@@ -57,6 +61,7 @@
           "fetch_sensors": "Get individual antitheft sensors",
           "fetch_lights": "Get lights",
           "fetch_covers": "Get covers",
+          "fetch_scenarios": "Get scenarios",
           "onOffLightsAsSwitch": "On/Off lights as switches",
           "fetch_thermostats": "Get thermostats"
         },
@@ -65,6 +70,7 @@
           "get_entities_names": "Will use the entities names and IDs as set in the Domina Plus system.",
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
+          "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
           "onOffLightsAsSwitch": "Use simple switch entities for On/Off lights (AVE family 1)."
         }
       }

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.typing import ConfigType
 
 PLATFORMS: list[Platform] = [
+    Platform.BUTTON,
     Platform.BINARY_SENSOR,
     Platform.CLIMATE,
     Platform.COVER,
@@ -94,7 +95,9 @@ async def _async_cleanup_stale_devices(hass: HomeAssistant, entry: ConfigEntry) 
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
 
-    for device_entry in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+    for device_entry in dr.async_entries_for_config_entry(
+        device_registry, entry.entry_id
+    ):
         if not any(identifier[0] == DOMAIN for identifier in device_entry.identifiers):
             continue
 

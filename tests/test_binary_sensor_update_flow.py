@@ -8,12 +8,14 @@ from unittest.mock import AsyncMock, Mock, patch
 from custom_components.ave_dominaplus.binary_sensor import (
     AveHubStatusBinarySensor,
     MotionBinarySensor,
+    ScenarioRunningBinarySensor,
     set_sensor_uid,
     update_binary_sensor,
 )
 from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_ANTITHEFT_AREA,
     AVE_FAMILY_MOTION_SENSOR,
+    AVE_FAMILY_SCENARIO,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
 from homeassistant.core import HomeAssistant
@@ -28,6 +30,7 @@ def _new_server(hass: HomeAssistant, **overrides) -> AveWebServer:
         "fetch_sensors": True,
         "fetch_lights": True,
         "fetch_covers": True,
+        "fetch_scenarios": True,
         "fetch_thermostats": True,
         "onOffLightsAsSwitch": True,
     }
@@ -53,7 +56,9 @@ def test_update_binary_sensor_creates_motion_sensor(hass: HomeAssistant) -> None
     server.async_add_bs_entities.assert_called_once()
 
 
-def test_update_binary_sensor_creates_area_sensor_with_name(hass: HomeAssistant) -> None:
+def test_update_binary_sensor_creates_area_sensor_with_name(
+    hass: HomeAssistant,
+) -> None:
     """Area updates should keep AVE names when enabled."""
     server = _new_server(hass, get_entities_names=True)
 
@@ -64,12 +69,33 @@ def test_update_binary_sensor_creates_area_sensor_with_name(hass: HomeAssistant)
     assert created.name == "Area North"
 
 
+def test_update_binary_sensor_creates_scenario_running_sensor(
+    hass: HomeAssistant,
+) -> None:
+    """Scenario updates should create running-state binary sensors."""
+    server = _new_server(hass, get_entities_names=True)
+
+    update_binary_sensor(server, AVE_FAMILY_SCENARIO, 12, 1, name="Morning")
+
+    unique_id = set_sensor_uid(AVE_FAMILY_SCENARIO, 12, server)
+    created = server.binary_sensors[unique_id]
+    assert isinstance(created, ScenarioRunningBinarySensor)
+    assert created.name == "Morning Running"
+    assert created.is_on is True
+
+
 def test_update_binary_sensor_skips_when_family_disabled(hass: HomeAssistant) -> None:
     """Family-specific fetch flags should suppress entity creation."""
-    server = _new_server(hass, fetch_sensors=False, fetch_sensor_areas=False)
+    server = _new_server(
+        hass,
+        fetch_sensors=False,
+        fetch_sensor_areas=False,
+        fetch_scenarios=False,
+    )
 
     update_binary_sensor(server, AVE_FAMILY_MOTION_SENSOR, 1, 1)
     update_binary_sensor(server, AVE_FAMILY_ANTITHEFT_AREA, 2, 1)
+    update_binary_sensor(server, AVE_FAMILY_SCENARIO, 3, 1)
 
     assert server.binary_sensors == {}
     server.async_add_bs_entities.assert_not_called()
@@ -118,6 +144,43 @@ def test_update_binary_sensor_existing_respects_manual_rename(
 
     sensor.update_state.assert_called_once_with(1)
     sensor.set_ave_name.assert_called_once_with("AVE Area")
+    sensor.set_name.assert_not_called()
+
+
+def test_update_scenario_binary_sensor_existing_respects_manual_rename(
+    hass: HomeAssistant,
+) -> None:
+    """Scenario running updates should not overwrite HA user-renamed names."""
+    server = _new_server(hass)
+    unique_id = set_sensor_uid(AVE_FAMILY_SCENARIO, 14, server)
+    sensor = ScenarioRunningBinarySensor(
+        unique_id,
+        AVE_FAMILY_SCENARIO,
+        14,
+        False,
+        hass,
+        server,
+        name="Scenario 14 Running",
+    )
+    sensor.update_state = Mock()
+    sensor.set_name = Mock()
+    sensor.set_ave_name = Mock()
+    server.binary_sensors[unique_id] = sensor
+
+    with patch(
+        "custom_components.ave_dominaplus.binary_sensor.check_name_changed",
+        return_value=True,
+    ):
+        update_binary_sensor(
+            server,
+            AVE_FAMILY_SCENARIO,
+            14,
+            1,
+            name="Evening",
+        )
+
+    sensor.update_state.assert_called_once_with(1)
+    sensor.set_ave_name.assert_called_once_with("Evening")
     sensor.set_name.assert_not_called()
 
 
