@@ -13,6 +13,7 @@ from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_SCENARIO,
     AVE_FAMILY_SHUTTER_ROLLING,
     AVE_FAMILY_THERMOSTAT,
+    AVE_UNHANDLED_UPD,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
 from homeassistant.core import HomeAssistant
@@ -270,3 +271,24 @@ async def test_manage_incoming_messages_routes_ping_to_pong(
     await server.manage_incoming_messages_messages("ping", [], [])
 
     server.send_ws_command.assert_awaited_once_with("PONG")
+
+
+def test_manage_upd_handles_all_unhandled_upd(hass, caplog) -> None:
+    """Call `manage_upd` for every unhandled UPD key and assert it logs."""
+    server = _new_server(hass)
+    _wire_callbacks(server)
+
+    server.manage_ldi_li2([], [["bad-record"]], "li2")
+
+    for key in AVE_UNHANDLED_UPD:
+        # manage_upd expects a parameters list where parameters[0] is the UPD key
+        server.manage_upd([key], [])
+
+        server.update_binary_sensor.assert_not_called()
+        server.update_thermostat.assert_not_called()
+        server.update_th_offset.assert_not_called()
+        server.update_binary_sensor.assert_not_called()
+        server.update_button.assert_not_called()
+        server.update_switch.assert_not_called()
+        server.update_light.assert_not_called()
+        server.update_cover.assert_not_called()

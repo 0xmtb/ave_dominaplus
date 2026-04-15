@@ -133,20 +133,24 @@ async def test_adopt_existing_lights_filters_and_adopts_original_name(hass) -> N
         if uid == "uid-error":
             raise ValueError("bad uid")
         if uid == "uid-mismatch":
-            return ("11:22:33:44:55:66", AVE_FAMILY_DIMMER, 1, 10)
+            return ("11:22:33:44:55:66", AVE_FAMILY_DIMMER, 1, 10, None)
         if uid == "uid-wrongfam":
-            return ("aa:bb:cc:dd:ee:ff", 999, 2, 11)
+            return ("aa:bb:cc:dd:ee:ff", 999, 2, 11, None)
         if uid == "uid-ok":
-            return ("aa:bb:cc:dd:ee:ff", AVE_FAMILY_DIMMER, 3, 12)
+            return ("aa:bb:cc:dd:ee:ff", AVE_FAMILY_DIMMER, 3, 12, None)
         raise AssertionError(f"unexpected uid {uid}")
 
     with (
-        patch("custom_components.ave_dominaplus.light.er.async_get", return_value=Mock()),
+        patch(
+            "custom_components.ave_dominaplus.light.er.async_get", return_value=Mock()
+        ),
         patch(
             "custom_components.ave_dominaplus.light.er.async_entries_for_config_entry",
             return_value=entities,
         ),
-        patch("custom_components.ave_dominaplus.light.parse_uid", side_effect=_parse_uid),
+        patch(
+            "custom_components.ave_dominaplus.light.parse_uid", side_effect=_parse_uid
+        ),
     ):
         await adopt_existing_lights(server, entry)
 
@@ -163,7 +167,9 @@ async def test_adopt_existing_lights_handles_registry_exceptions(hass) -> None:
     entry = _entry(server)
 
     with (
-        patch("custom_components.ave_dominaplus.light.er.async_get", return_value=Mock()),
+        patch(
+            "custom_components.ave_dominaplus.light.er.async_get", return_value=Mock()
+        ),
         patch(
             "custom_components.ave_dominaplus.light.er.async_entries_for_config_entry",
             side_effect=RuntimeError("registry failure"),
@@ -177,7 +183,9 @@ def test_update_light_ignores_unsupported_family(hass) -> None:
     server = make_server(hass)
     server.async_add_lg_entities = Mock()
 
-    update_light(server, 999, ave_device_id=5, device_status=1, name="x", address_dec=10)
+    update_light(
+        server, 999, ave_device_id=5, device_status=1, name="x", address_dec=10
+    )
 
     assert server.lights == {}
     server.async_add_lg_entities.assert_not_called()
@@ -192,7 +200,10 @@ def test_update_light_reuses_existing_unique_id_from_lookup(hass) -> None:
     light.handle_webserver_update = Mock()
     server.lights[existing_uid] = light
 
-    with patch("custom_components.ave_dominaplus.light.find_unique_id", return_value=existing_uid):
+    with patch(
+        "custom_components.ave_dominaplus.light.find_unique_id",
+        return_value=existing_uid,
+    ):
         update_light(
             server,
             AVE_FAMILY_DIMMER,
@@ -216,7 +227,9 @@ def test_update_light_builds_uid_when_initial_lookup_returns_none(hass) -> None:
             "custom_components.ave_dominaplus.light.build_uid",
             side_effect=[None, "rebuilt-uid"],
         ),
-        patch("custom_components.ave_dominaplus.light.find_unique_id", return_value=None),
+        patch(
+            "custom_components.ave_dominaplus.light.find_unique_id", return_value=None
+        ),
     ):
         update_light(
             server,
@@ -237,11 +250,15 @@ def test_check_name_changed_handles_name_override_and_missing_entry(hass) -> Non
     registry.async_get_entity_id.return_value = "light.test"
     registry.async_get.return_value = SimpleNamespace(name="New", original_name="Old")
 
-    with patch("custom_components.ave_dominaplus.light.er.async_get", return_value=registry):
+    with patch(
+        "custom_components.ave_dominaplus.light.er.async_get", return_value=registry
+    ):
         assert check_name_changed(hass, "uid") is True
 
     registry.async_get_entity_id.return_value = None
-    with patch("custom_components.ave_dominaplus.light.er.async_get", return_value=registry):
+    with patch(
+        "custom_components.ave_dominaplus.light.er.async_get", return_value=registry
+    ):
         assert check_name_changed(hass, "uid") is False
 
 

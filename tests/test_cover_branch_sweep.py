@@ -144,11 +144,11 @@ async def test_adopt_existing_covers_filters_and_adopts_original_name(hass) -> N
         if uid == "uid-error":
             raise ValueError("bad uid")
         if uid == "uid-mismatch":
-            return ("11:22:33:44:55:66", AVE_FAMILY_SHUTTER_ROLLING, 1, 10)
+            return ("11:22:33:44:55:66", AVE_FAMILY_SHUTTER_ROLLING, 1, 10, None)
         if uid == "uid-wrongfam":
-            return ("aa:bb:cc:dd:ee:ff", 999, 2, 11)
+            return ("aa:bb:cc:dd:ee:ff", 999, 2, 11, None)
         if uid == "uid-ok":
-            return ("aa:bb:cc:dd:ee:ff", AVE_FAMILY_SHUTTER_HUNG, 3, 12)
+            return ("aa:bb:cc:dd:ee:ff", AVE_FAMILY_SHUTTER_HUNG, 3, 12, None)
         raise AssertionError(f"unexpected uid {uid}")
 
     with (
@@ -193,7 +193,9 @@ async def test_adopt_existing_covers_returns_when_registry_missing(hass) -> None
     """Adoption should return cleanly when entity registry is unavailable."""
     server = make_server(hass)
 
-    with patch("custom_components.ave_dominaplus.cover.er.async_get", return_value=None):
+    with patch(
+        "custom_components.ave_dominaplus.cover.er.async_get", return_value=None
+    ):
         await adopt_existing_covers(server, _entry(server))
 
 
@@ -213,14 +215,16 @@ async def test_adopt_existing_covers_prefers_entity_name(hass) -> None:
     )
 
     with (
-        patch("custom_components.ave_dominaplus.cover.er.async_get", return_value=Mock()),
+        patch(
+            "custom_components.ave_dominaplus.cover.er.async_get", return_value=Mock()
+        ),
         patch(
             "custom_components.ave_dominaplus.cover.er.async_entries_for_config_entry",
             return_value=[entity],
         ),
         patch(
             "custom_components.ave_dominaplus.cover.parse_uid",
-            return_value=("aa:bb:cc:dd:ee:ff", AVE_FAMILY_SHUTTER_ROLLING, 9, 40),
+            return_value=("aa:bb:cc:dd:ee:ff", AVE_FAMILY_SHUTTER_ROLLING, 9, 40, None),
         ),
     ):
         await adopt_existing_covers(server, _entry(server))

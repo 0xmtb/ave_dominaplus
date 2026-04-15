@@ -281,6 +281,10 @@ def test_manage_upd_covers_remaining_noop_and_unknown_branches(
     """UPD routing should handle no-op and unknown branches without callback errors."""
     server = make_server(hass, fetch_sensor_areas=False, fetch_sensors=False)
     server.update_binary_sensor = Mock()
+    server.update_button = Mock()
+    server.update_switch = Mock()
+    server.update_light = Mock()
+    server.update_cover = Mock()
     server.update_thermostat = Mock()
     server.update_th_offset = Mock()
 
@@ -295,6 +299,10 @@ def test_manage_upd_covers_remaining_noop_and_unknown_branches(
     server.update_binary_sensor.assert_not_called()
     server.update_thermostat.assert_called_once()
     server.update_th_offset.assert_not_called()
+    server.update_button.assert_not_called()
+    server.update_switch.assert_not_called()
+    server.update_light.assert_not_called()
+    server.update_cover.assert_not_called()
 
 
 def test_manage_upd_tt_unknown_command_is_ignored(hass: HomeAssistant) -> None:
