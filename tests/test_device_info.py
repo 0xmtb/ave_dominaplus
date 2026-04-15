@@ -8,6 +8,7 @@ from typing import cast
 from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_DIMMER,
     AVE_FAMILY_MOTION_SENSOR,
+    AVE_FAMILY_SCENARIO,
     AVE_FAMILY_THERMOSTAT,
     DOMAIN,
 )
@@ -155,3 +156,45 @@ def test_endpoint_motion_sensors_are_grouped() -> None:
         (DOMAIN, "endpoint_entry-123_antitheft_sensors")
     }
     assert info.get("name") == "Dominaplus Antitheft Sensors"
+
+
+def test_endpoint_scenario_name_falls_back_to_device_id() -> None:
+    """Scenario devices should use id-based fallback when AVE name is missing."""
+    server = _server_stub(config_entry_id="entry-123")
+
+    info = build_endpoint_device_info(
+        cast(AveWebServer, server),
+        family=AVE_FAMILY_SCENARIO,
+        ave_device_id=29,
+    )
+
+    assert info.get("identifiers") == {(DOMAIN, "endpoint_entry-123_scenario_29")}
+    assert info.get("name") == "Scenario 29"
+
+
+def test_endpoint_scenario_name_adds_prefix_when_needed() -> None:
+    """Scenario names should be prefixed consistently when AVE omits it."""
+    server = _server_stub(config_entry_id="entry-123")
+
+    info = build_endpoint_device_info(
+        cast(AveWebServer, server),
+        family=AVE_FAMILY_SCENARIO,
+        ave_device_id=31,
+        ave_name="Evening",
+    )
+
+    assert info.get("name") == "Scenario Evening"
+
+
+def test_endpoint_scenario_name_keeps_existing_prefix() -> None:
+    """Scenario names that already include prefix should not be doubled."""
+    server = _server_stub(config_entry_id="entry-123")
+
+    info = build_endpoint_device_info(
+        cast(AveWebServer, server),
+        family=AVE_FAMILY_SCENARIO,
+        ave_device_id=32,
+        ave_name="Scenario Night",
+    )
+
+    assert info.get("name") == "Scenario Night"

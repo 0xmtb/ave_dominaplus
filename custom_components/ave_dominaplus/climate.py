@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .ave_map import AveMapCommand
 from .ave_thermostat import AveThermostatProperties
 from .const import AVE_FAMILY_THERMOSTAT
-from .device_info import build_endpoint_device_info
+from .device_info import build_endpoint_device_info, sync_device_registry_name
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
@@ -684,21 +684,12 @@ class AveThermostat(ClimateEntity):
         if not identifiers:
             return
 
-        device_registry = dr.async_get(self.hass)
-        device_entry = device_registry.async_get_device(identifiers=identifiers)
-        if device_entry is None:
-            return
-
-        # Respect user-chosen device names from the HA UI.
-        if device_entry.name_by_user is not None:
-            return
-
-        resolved_name = updated_device_info.get("name")
-        if resolved_name and device_entry.name != resolved_name:
-            device_registry.async_update_device(
-                device_id=device_entry.id,
-                name=resolved_name,
-            )
+        sync_device_registry_name(
+            self.hass,
+            updated_device_info,
+            identifiers=identifiers,
+            device_registry_getter=dr.async_get,
+        )
 
         self._attr_device_info = updated_device_info
 

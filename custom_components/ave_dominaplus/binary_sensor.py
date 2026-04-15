@@ -20,7 +20,11 @@ from .const import (
     AVE_FAMILY_MOTION_SENSOR,
     AVE_FAMILY_SCENARIO,
 )
-from .device_info import build_endpoint_device_info, build_hub_device_info
+from .device_info import (
+    build_endpoint_device_info,
+    build_hub_device_info,
+    sync_device_registry_name,
+)
 from .uid_v2 import build_uid, parse_uid
 from .web_server import AveWebServer
 
@@ -565,29 +569,11 @@ class ScenarioRunningBinarySensor(BinarySensorEntity):
             ave_name=ave_name,
         )
         self._attr_device_info = updated_device_info
-
-        if self.hass is None:
-            return
-
-        identifiers = updated_device_info.get("identifiers")
-        if not identifiers:
-            return
-
-        device_registry = dr.async_get(self.hass)
-        device_entry = device_registry.async_get_device(identifiers=identifiers)
-        if device_entry is None:
-            return
-
-        # Respect user-chosen device names from the HA UI.
-        if device_entry.name_by_user is not None:
-            return
-
-        resolved_name = updated_device_info.get("name")
-        if resolved_name and device_entry.name != resolved_name:
-            device_registry.async_update_device(
-                device_id=device_entry.id,
-                name=resolved_name,
-            )
+        sync_device_registry_name(
+            self.hass,
+            updated_device_info,
+            device_registry_getter=dr.async_get,
+        )
 
     def build_name(self) -> str:
         """Build the default name for this sensor."""
