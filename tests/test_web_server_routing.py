@@ -221,7 +221,7 @@ def test_manage_ldi_li2_routes_onoff_with_address(hass: HomeAssistant) -> None:
             "address_hex": "0F",
         }
     ]
-    assert server._ldi_done.is_set()
+    assert server.ldi_done.is_set()
 
 
 def test_manage_ldi_li2_routes_scenario_button_and_sensor(hass: HomeAssistant) -> None:
@@ -259,7 +259,7 @@ def test_manage_ldi_li2_handles_bad_records_without_raising(
     server.update_switch.assert_not_called()
     server.update_light.assert_not_called()
     server.update_cover.assert_not_called()
-    assert server._ldi_done.is_set()
+    assert server.ldi_done.is_set()
 
 
 async def test_manage_incoming_messages_routes_ping_to_pong(

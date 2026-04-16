@@ -394,7 +394,7 @@ def manage_ldi_li2(
                 continue
         except Exception:
             _LOGGER.exception("Error parsing device record: %s", record)
-    server._ldi_done.set()
+    server.ldi_done.set()
 
 
 def manage_lm(

@@ -11,16 +11,11 @@ import aiohttp
 from defusedxml import ElementTree as DefusedET
 
 from .ave_map import AveMap
-from .const import (
-    AVE_FAMILY_ANTITHEFT_AREA,
-    AVE_FAMILY_DIMMER,
-    AVE_FAMILY_ONOFFLIGHTS,
-    AVE_FAMILY_SCENARIO,
-    AVE_FAMILY_SHUTTER_HUNG,
-    AVE_FAMILY_SHUTTER_ROLLING,
-    AVE_FAMILY_SHUTTER_SLIDING,
+from .webserver import (
+    commands as ws_commands,
+    connection_workflow as ws_connection_workflow,
+    routing as ws_routing,
 )
-from .webserver import commands as ws_commands, routing as ws_routing
 
 if TYPE_CHECKING:
     from types import MappingProxyType
@@ -116,11 +111,11 @@ class AveWebServer:
         self.async_add_th_entities: Any = None
         self.update_thermostat: Any = None
         self.ave_map: AveMap = AveMap()
-        self._ldi_done = asyncio.Event()
+        self.ldi_done = asyncio.Event()
         self.thermostat_lm_done = asyncio.Event()
         self.thermostat_lmc_done = asyncio.Event()
         self.connect_actions_task: asyncio.Task | None = None
-        self._thermostat_fetch_task: asyncio.Task | None = None
+        self.thermostat_fetch_task: asyncio.Task | None = None
         self.numbers: dict = {}  # Track number entities by unique ID
         self.async_add_number_entities: Any = None
         self.update_th_offset: Any = None
@@ -326,9 +321,9 @@ class AveWebServer:
         if self.connect_actions_task and not self.connect_actions_task.done():
             self.connect_actions_task.cancel()
             self.connect_actions_task = None
-        if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
-            self._thermostat_fetch_task.cancel()
-            self._thermostat_fetch_task = None
+        if self.thermostat_fetch_task and not self.thermostat_fetch_task.done():
+            self.thermostat_fetch_task.cancel()
+            self.thermostat_fetch_task = None
         if self.ws_conn:
             await self.ws_conn.close()
             self.ws_conn = None
@@ -357,7 +352,7 @@ class AveWebServer:
 
                 if self.started:
                     self.connect_actions_task = asyncio.create_task(
-                        self.on_connect_actions()
+                        ws_connection_workflow.on_connect_actions(self)
                     )
 
                 async for msg in self.ws_conn:
@@ -375,102 +370,6 @@ class AveWebServer:
                 await asyncio.sleep(5)  # Retry after a delay
 
         _LOGGER.debug("WebSocket connection stopped")
-
-    async def on_connect_actions(self) -> None:
-        """Actions to perform after connecting to the web server."""
-        if self.ws_conn is None or self.ws_conn.closed:
-            return
-
-        self._ldi_done.clear()
-        # await self.send_ws_command("LDI")  # Get device list (legacy)
-        await self.send_ws_command("LI2")  # Get device list (with addresses)
-        if not await self._wait_for_ldi():
-            return
-
-        if self.settings.fetch_lights:
-            # Get status by family type 1 (switches) and 2 (dimmers)
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_ONOFFLIGHTS)])
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_DIMMER)])
-
-        if self.settings.fetch_covers:
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_ROLLING)])
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_SLIDING)])
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_SHUTTER_HUNG)])
-
-        if self.settings.fetch_scenarios:
-            # probably useless. Evaluate getting WSF instead
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_SCENARIO)])
-
-        # Get status by family type 12 (motion detection areas)
-        if self.settings.fetch_sensor_areas:
-            await self.send_ws_command("GSF", [str(AVE_FAMILY_ANTITHEFT_AREA)])
-            await self.send_ws_command("WSF", [str(AVE_FAMILY_ANTITHEFT_AREA)])
-
-        if self.settings.fetch_thermostats:
-            await self._start_thermostats_fetch_flow()
-
-        await self.send_ws_command("SU3")  # Start streaming updates (most of them)
-
-        # Starts streaming some other updates (UPD for TLO and XU, NET and CLD)
-        # await self.send_ws_command("SU2")
-
-    async def _start_thermostats_fetch_flow(self) -> None:
-        """Start thermostat bootstrap flow without blocking message handling."""
-
-        """Some thermostats updates come with mapCommandId as a reference instead of device ID
-        so we need to fetch the map and commands to be able to link thermostats to their device ID and get their names if the setting is enabled.
-        """
-        self.ave_map = AveMap()
-        self.thermostat_lm_done.clear()
-        self.thermostat_lmc_done.clear()
-
-        if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
-            self._thermostat_fetch_task.cancel()
-
-        await self.send_ws_command("LM")
-        self._thermostat_fetch_task = asyncio.create_task(self._termostats_fetch_flow())
-
-    async def _wait_for_ldi(self) -> bool:
-        """Wait for at least one LDI response before thermostat bootstrap."""
-        try:
-            await asyncio.wait_for(self._ldi_done.wait(), 15.0)
-        except TimeoutError:
-            _LOGGER.warning(
-                "Timed out waiting for LDI response; skipping thermostat bootstrap"
-            )
-            return False
-        return True
-
-    async def _termostats_fetch_flow(self) -> None:
-        # 1) wait until LM responses are received and the map is loaded
-        try:
-            await asyncio.wait_for(self.thermostat_lm_done.wait(), 15.0)
-        except TimeoutError:
-            _LOGGER.warning(
-                "Timed out waiting for LM responses; skipping thermostat map"
-            )
-            return
-
-        # 2) send LMC for each area once the LM map is loaded
-        if self.ave_map.areas_loaded and self.ws_conn and not self.ws_conn.closed:
-            if not self.ave_map.areas:
-                _LOGGER.debug("LM map returned no areas")
-                return
-            for map_id in self.ave_map.areas:
-                await self.send_ws_command("LMC", [map_id])
-        else:
-            _LOGGER.debug("Map not loaded or ws disconnected; skipping LMC send")
-            return
-
-        # 3) wait for all LMC responses (commands loaded)
-        try:
-            await asyncio.wait_for(self.thermostat_lmc_done.wait(), 15.0)
-        except TimeoutError:
-            _LOGGER.warning("Timed out waiting for LMC responses; proceeding")
-
-        # 4) request thermostat status snapshots
-        for device_id in self.all_thermostats_raw:
-            await self.send_ws_command("WTS", [str(device_id)])
 
     def value_to_hex(self, value):
         """Return the hexadecimal value of a number."""
