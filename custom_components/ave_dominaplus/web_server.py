@@ -10,12 +10,9 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from defusedxml import ElementTree as DefusedET
 
+from . import ws_commands, ws_routing
 from .ave_map import AveMap
-from .webserver import (
-    commands as ws_commands,
-    connection_workflow as ws_connection_workflow,
-    routing as ws_routing,
-)
+from .ws_connection_flow import on_connect_actions as ws_on_connect_actions
 
 if TYPE_CHECKING:
     from types import MappingProxyType
@@ -352,7 +349,7 @@ class AveWebServer:
 
                 if self.started:
                     self.connect_actions_task = asyncio.create_task(
-                        ws_connection_workflow.on_connect_actions(self)
+                        ws_on_connect_actions(self)
                     )
 
                 async for msg in self.ws_conn:

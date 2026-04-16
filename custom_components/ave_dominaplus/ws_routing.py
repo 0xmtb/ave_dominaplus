@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ..ave_thermostat import AveThermostatProperties
-from ..const import (
+from .ave_thermostat import AveThermostatProperties
+from .const import (
     AVE_FAMILY_ANTITHEFT,
     AVE_FAMILY_ANTITHEFT_AREA,
     AVE_FAMILY_CAMERA,
@@ -23,7 +23,7 @@ from ..const import (
 )
 
 if TYPE_CHECKING:
-    from ..web_server import AveWebServer
+    from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
 

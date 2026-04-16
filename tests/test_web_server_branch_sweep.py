@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+from custom_components.ave_dominaplus import ws_routing
 from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_ANTITHEFT,
     AVE_FAMILY_ANTITHEFT_AREA,
@@ -18,9 +19,9 @@ from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_THERMOSTAT,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
-from custom_components.ave_dominaplus.webserver import (
-    connection_workflow as ws_connection_workflow,
-    routing as ws_routing,
+from custom_components.ave_dominaplus.ws_connection_flow import (
+    start_thermostats_fetch_flow,
+    thermostats_fetch_flow,
 )
 from homeassistant.core import HomeAssistant
 from tests.web_server_harness import FakeWSConnection, make_server
@@ -153,10 +154,10 @@ async def test_start_thermostat_flow_cancels_previous_pending_task(
         return fake_task
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.connection_workflow.asyncio.create_task",
+        "custom_components.ave_dominaplus.ws_connection_flow.asyncio.create_task",
         side_effect=_create_task,
     ):
-        await ws_connection_workflow.start_thermostats_fetch_flow(server)
+        await start_thermostats_fetch_flow(server)
 
     pending_task.cancel.assert_called_once()
     server.send_ws_command.assert_awaited_once_with("LM")
@@ -173,7 +174,7 @@ async def test_thermostat_fetch_flow_returns_when_map_has_no_areas(
     server.ave_map.areas = {}
     server.thermostat_lm_done.set()
 
-    await ws_connection_workflow.thermostats_fetch_flow(server)
+    await thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_not_awaited()
 
@@ -189,7 +190,7 @@ async def test_thermostat_fetch_flow_returns_when_map_not_ready_or_ws_disconnect
     server.ave_map.areas = {1: object()}
     server.thermostat_lm_done.set()
 
-    await ws_connection_workflow.thermostats_fetch_flow(server)
+    await thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_not_awaited()
 
@@ -216,10 +217,10 @@ async def test_thermostat_fetch_flow_continues_when_lmc_wait_times_out(
         return await coro
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.connection_workflow.asyncio.wait_for",
+        "custom_components.ave_dominaplus.ws_connection_flow.asyncio.wait_for",
         new=AsyncMock(side_effect=_wait_for),
     ):
-        await ws_connection_workflow.thermostats_fetch_flow(server)
+        await thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_any_await("LMC", [1])
     server.send_ws_command.assert_any_await("WTS", ["4"])

@@ -6,8 +6,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from custom_components.ave_dominaplus.web_server import AveWebServer
-from custom_components.ave_dominaplus.webserver import (
-    connection_workflow as ws_connection_workflow,
+from custom_components.ave_dominaplus.ws_connection_flow import (
+    on_connect_actions,
+    start_thermostats_fetch_flow,
+    thermostats_fetch_flow,
 )
 from homeassistant.core import HomeAssistant
 
@@ -38,18 +40,16 @@ async def test_on_connect_actions_sends_expected_bootstrap_commands(
     server.send_ws_command = AsyncMock()
 
     with (
-        patch.object(
-            ws_connection_workflow,
-            "wait_for_ldi",
+        patch(
+            "custom_components.ave_dominaplus.ws_connection_flow.wait_for_ldi",
             new=AsyncMock(return_value=True),
         ),
-        patch.object(
-            ws_connection_workflow,
-            "start_thermostats_fetch_flow",
+        patch(
+            "custom_components.ave_dominaplus.ws_connection_flow.start_thermostats_fetch_flow",
             new=AsyncMock(),
-        ) as start_thermostats_fetch_flow,
+        ) as start_thermostats_fetch_flow_mock,
     ):
-        await ws_connection_workflow.on_connect_actions(server)
+        await on_connect_actions(server)
 
     # Core bootstrap commands should always include LI2 and SU3.
     server.send_ws_command.assert_any_await("LI2")
@@ -59,7 +59,7 @@ async def test_on_connect_actions_sends_expected_bootstrap_commands(
     server.send_ws_command.assert_any_await("GSF", ["3"])
     server.send_ws_command.assert_any_await("GSF", ["6"])
     server.send_ws_command.assert_any_await("WSF", ["12"])
-    start_thermostats_fetch_flow.assert_awaited_once_with(server)
+    start_thermostats_fetch_flow_mock.assert_awaited_once_with(server)
 
 
 async def test_on_connect_actions_stops_when_ldi_wait_fails(
@@ -71,21 +71,19 @@ async def test_on_connect_actions_stops_when_ldi_wait_fails(
     server.send_ws_command = AsyncMock()
 
     with (
-        patch.object(
-            ws_connection_workflow,
-            "wait_for_ldi",
+        patch(
+            "custom_components.ave_dominaplus.ws_connection_flow.wait_for_ldi",
             new=AsyncMock(return_value=False),
         ),
-        patch.object(
-            ws_connection_workflow,
-            "start_thermostats_fetch_flow",
+        patch(
+            "custom_components.ave_dominaplus.ws_connection_flow.start_thermostats_fetch_flow",
             new=AsyncMock(),
-        ) as start_thermostats_fetch_flow,
+        ) as start_thermostats_fetch_flow_mock,
     ):
-        await ws_connection_workflow.on_connect_actions(server)
+        await on_connect_actions(server)
 
     server.send_ws_command.assert_awaited_once_with("LI2")
-    start_thermostats_fetch_flow.assert_not_awaited()
+    start_thermostats_fetch_flow_mock.assert_not_awaited()
 
 
 async def test_on_connect_actions_returns_when_ws_closed(hass: HomeAssistant) -> None:
@@ -94,7 +92,7 @@ async def test_on_connect_actions_returns_when_ws_closed(hass: HomeAssistant) ->
     server.ws_conn = SimpleNamespace(closed=True)
     server.send_ws_command = AsyncMock()
 
-    await ws_connection_workflow.on_connect_actions(server)
+    await on_connect_actions(server)
 
     server.send_ws_command.assert_not_awaited()
 
@@ -112,10 +110,10 @@ async def test_start_thermostats_fetch_flow_initializes_and_sends_lm(
         return fake_task
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.connection_workflow.asyncio.create_task",
+        "custom_components.ave_dominaplus.ws_connection_flow.asyncio.create_task",
         side_effect=_create_task,
     ):
-        await ws_connection_workflow.start_thermostats_fetch_flow(server)
+        await start_thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_awaited_once_with("LM")
     assert server.thermostat_fetch_task is fake_task
@@ -134,7 +132,7 @@ async def test_termostats_fetch_flow_sends_lmc_and_wts_when_ready(
     server.thermostat_lm_done.set()
     server.thermostat_lmc_done.set()
 
-    await ws_connection_workflow.thermostats_fetch_flow(server)
+    await thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_any_await("LMC", [1])
     server.send_ws_command.assert_any_await("LMC", [2])
@@ -152,10 +150,10 @@ async def test_termostats_fetch_flow_returns_on_lm_timeout(hass: HomeAssistant) 
         raise TimeoutError
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.connection_workflow.asyncio.wait_for",
+        "custom_components.ave_dominaplus.ws_connection_flow.asyncio.wait_for",
         new=AsyncMock(side_effect=_raise_timeout),
     ):
-        await ws_connection_workflow.thermostats_fetch_flow(server)
+        await thermostats_fetch_flow(server)
 
     server.send_ws_command.assert_not_awaited()
 

@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from custom_components.ave_dominaplus.web_server import AveWebServer
+    from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
 

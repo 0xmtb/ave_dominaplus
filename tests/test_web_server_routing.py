@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+from custom_components.ave_dominaplus import ws_routing
 from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_ANTITHEFT_AREA,
     AVE_FAMILY_DIMMER,
@@ -16,7 +17,6 @@ from custom_components.ave_dominaplus.const import (
     AVE_UNHANDLED_UPD,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
-from custom_components.ave_dominaplus.webserver import routing as ws_routing
 from homeassistant.core import HomeAssistant
 
 

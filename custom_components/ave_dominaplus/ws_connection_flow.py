@@ -6,8 +6,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from ..ave_map import AveMap
-from ..const import (
+from .ave_map import AveMap
+from .const import (
     AVE_FAMILY_ANTITHEFT_AREA,
     AVE_FAMILY_DIMMER,
     AVE_FAMILY_ONOFFLIGHTS,
@@ -18,7 +18,7 @@ from ..const import (
 )
 
 if TYPE_CHECKING:
-    from ..web_server import AveWebServer
+    from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
 

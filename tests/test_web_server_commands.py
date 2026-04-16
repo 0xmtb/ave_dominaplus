@@ -5,10 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+from custom_components.ave_dominaplus import ws_routing
 from custom_components.ave_dominaplus.ave_thermostat import AveThermostatProperties
 from custom_components.ave_dominaplus.const import AVE_FAMILY_THERMOSTAT
 from custom_components.ave_dominaplus.web_server import AveWebServer
-from custom_components.ave_dominaplus.webserver import routing as ws_routing
 from homeassistant.core import HomeAssistant
 
 
@@ -141,7 +141,7 @@ def test_manage_wts_routes_name_and_offset_updates(hass: HomeAssistant) -> None:
     props.offset = 1.3
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.routing.AveThermostatProperties.from_wts",
+        "custom_components.ave_dominaplus.ws_routing.AveThermostatProperties.from_wts",
         return_value=props,
     ):
         ws_routing.manage_wts(server, ["4"], [["ignored"]])
@@ -170,7 +170,7 @@ def test_manage_wts_skips_offset_update_when_missing(hass: HomeAssistant) -> Non
     props.offset = None
 
     with patch(
-        "custom_components.ave_dominaplus.webserver.routing.AveThermostatProperties.from_wts",
+        "custom_components.ave_dominaplus.ws_routing.AveThermostatProperties.from_wts",
         return_value=props,
     ):
         ws_routing.manage_wts(server, ["4"], [["ignored"]])
