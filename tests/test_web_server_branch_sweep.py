@@ -18,6 +18,7 @@ from custom_components.ave_dominaplus.const import (
     AVE_FAMILY_THERMOSTAT,
 )
 from custom_components.ave_dominaplus.web_server import AveWebServer
+from custom_components.ave_dominaplus.webserver import routing as ws_routing
 from homeassistant.core import HomeAssistant
 from tests.web_server_harness import FakeWSConnection, make_server
 
@@ -167,7 +168,7 @@ async def test_thermostat_fetch_flow_returns_when_map_has_no_areas(
     server.ws_conn = SimpleNamespace(closed=False)
     server.ave_map.areas_loaded = True
     server.ave_map.areas = {}
-    server._thermostat_lm_done.set()
+    server.thermostat_lm_done.set()
 
     await server._termostats_fetch_flow()
 
@@ -183,7 +184,7 @@ async def test_thermostat_fetch_flow_returns_when_map_not_ready_or_ws_disconnect
     server.ws_conn = SimpleNamespace(closed=True)
     server.ave_map.areas_loaded = True
     server.ave_map.areas = {1: object()}
-    server._thermostat_lm_done.set()
+    server.thermostat_lm_done.set()
 
     await server._termostats_fetch_flow()
 
@@ -200,7 +201,7 @@ async def test_thermostat_fetch_flow_continues_when_lmc_wait_times_out(
     server.ave_map.areas_loaded = True
     server.ave_map.areas = {1: object()}
     server.all_thermostats_raw = {4: {}, 5: {}}
-    server._thermostat_lm_done.set()
+    server.thermostat_lm_done.set()
 
     call_count = {"n": 0}
 
@@ -244,35 +245,37 @@ async def test_manage_incoming_dispatches_all_known_and_unknown_commands(
     """Incoming command dispatcher should route all known command families."""
     server = make_server(hass)
     server.send_ws_command = AsyncMock()
-    server.manage_gsf = Mock()
-    server.manage_upd = Mock()
-    server.manage_ldi_li2 = Mock()
-    server.manage_lm = Mock()
-    server.manage_lmc = Mock()
-    server.manage_wts = Mock()
 
-    await server.manage_incoming_messages("pong", [], [])
-    await server.manage_incoming_messages("ack", ["LI2"], [])
-    await server.manage_incoming_messages("ping", [], [])
-    await server.manage_incoming_messages("gsf", ["1"], [])
-    await server.manage_incoming_messages("upd", ["WS"], [])
-    await server.manage_incoming_messages("ldi", [], [])
-    await server.manage_incoming_messages("li2", [], [])
-    await server.manage_incoming_messages("lm", [], [])
-    await server.manage_incoming_messages("lmc", ["1"], [])
-    await server.manage_incoming_messages("wts", ["4"], [])
-    await server.manage_incoming_messages("cld", [], [])
-    await server.manage_incoming_messages("net", [], [])
-    await server.manage_incoming_messages("nack", [], [])
-    await server.manage_incoming_messages("unknown", [], [])
+    with (
+        patch.object(ws_routing, "manage_gsf") as manage_gsf,
+        patch.object(ws_routing, "manage_upd") as manage_upd,
+        patch.object(ws_routing, "manage_ldi_li2") as manage_ldi_li2,
+        patch.object(ws_routing, "manage_lm") as manage_lm,
+        patch.object(ws_routing, "manage_lmc") as manage_lmc,
+        patch.object(ws_routing, "manage_wts") as manage_wts,
+    ):
+        await server.manage_incoming_messages("pong", [], [])
+        await server.manage_incoming_messages("ack", ["LI2"], [])
+        await server.manage_incoming_messages("ping", [], [])
+        await server.manage_incoming_messages("gsf", ["1"], [])
+        await server.manage_incoming_messages("upd", ["WS"], [])
+        await server.manage_incoming_messages("ldi", [], [])
+        await server.manage_incoming_messages("li2", [], [])
+        await server.manage_incoming_messages("lm", [], [])
+        await server.manage_incoming_messages("lmc", ["1"], [])
+        await server.manage_incoming_messages("wts", ["4"], [])
+        await server.manage_incoming_messages("cld", [], [])
+        await server.manage_incoming_messages("net", [], [])
+        await server.manage_incoming_messages("nack", [], [])
+        await server.manage_incoming_messages("unknown", [], [])
 
     server.send_ws_command.assert_awaited_once_with("PONG")
-    server.manage_gsf.assert_called_once()
-    server.manage_upd.assert_called_once()
-    assert server.manage_ldi_li2.call_count == 2
-    server.manage_lm.assert_called_once()
-    server.manage_lmc.assert_called_once()
-    server.manage_wts.assert_called_once()
+    manage_gsf.assert_called_once_with(server, ["1"], [])
+    manage_upd.assert_called_once_with(server, ["WS"], [])
+    assert manage_ldi_li2.call_count == 2
+    manage_lm.assert_called_once_with(server, [], [])
+    manage_lmc.assert_called_once_with(server, ["1"], [])
+    manage_wts.assert_called_once_with(server, ["4"], [])
 
 
 def test_manage_upd_covers_remaining_noop_and_unknown_branches(
@@ -288,13 +291,13 @@ def test_manage_upd_covers_remaining_noop_and_unknown_branches(
     server.update_thermostat = Mock()
     server.update_th_offset = Mock()
 
-    server.manage_upd(["WS", "1", "200001", "1"], [])
-    server.manage_upd(["X", "A", "7", "0", "0", "0", "1"], [])
-    server.manage_upd(["X", "S", "12", "0", "1"], [])
-    server.manage_upd(["X", "U", "2"], [])
-    server.manage_upd(["TM", "1", "2"], [])
-    server.manage_upd(["HO"], [])
-    server.manage_upd(["UNHANDLED"], [])
+    ws_routing.manage_upd(server, ["WS", "1", "200001", "1"], [])
+    ws_routing.manage_upd(server, ["X", "A", "7", "0", "0", "0", "1"], [])
+    ws_routing.manage_upd(server, ["X", "S", "12", "0", "1"], [])
+    ws_routing.manage_upd(server, ["X", "U", "2"], [])
+    ws_routing.manage_upd(server, ["TM", "1", "2"], [])
+    ws_routing.manage_upd(server, ["HO"], [])
+    ws_routing.manage_upd(server, ["UNHANDLED"], [])
 
     server.update_binary_sensor.assert_not_called()
     server.update_thermostat.assert_called_once()
@@ -313,7 +316,7 @@ def test_manage_upd_tt_unknown_command_is_ignored(hass: HomeAssistant) -> None:
     server.ave_map.command_loaded = True
     server.ave_map.get_command_by_id_and_family = Mock(return_value=None)
 
-    server.manage_upd(["TR", "99", "205"], [])
+    ws_routing.manage_upd(server, ["TR", "99", "205"], [])
 
     server.update_thermostat.assert_not_called()
 
@@ -328,10 +331,10 @@ def test_manage_gsf_routes_antitheft_dimmer_cover_and_light_mode(
     server.update_light = Mock()
     server.update_cover = Mock()
 
-    server.manage_gsf([str(AVE_FAMILY_ANTITHEFT)], [["10", "1"]])
-    server.manage_gsf([str(AVE_FAMILY_ONOFFLIGHTS)], [["11", "0"]])
-    server.manage_gsf([str(AVE_FAMILY_DIMMER)], [["12", "15"]])
-    server.manage_gsf([str(AVE_FAMILY_SHUTTER_HUNG)], [["13", "2"]])
+    ws_routing.manage_gsf(server, [str(AVE_FAMILY_ANTITHEFT)], [["10", "1"]])
+    ws_routing.manage_gsf(server, [str(AVE_FAMILY_ONOFFLIGHTS)], [["11", "0"]])
+    ws_routing.manage_gsf(server, [str(AVE_FAMILY_DIMMER)], [["12", "15"]])
+    ws_routing.manage_gsf(server, [str(AVE_FAMILY_SHUTTER_HUNG)], [["13", "2"]])
 
     server.update_binary_sensor.assert_called_once_with(
         server, AVE_FAMILY_ANTITHEFT, 10, 1
@@ -368,7 +371,7 @@ def test_manage_ldi_li2_covers_special_names_types_and_bad_address(
         ["11", "Unknown", "999", "15"],
     ]
 
-    server.manage_ldi_li2([], records, "li2")
+    ws_routing.manage_ldi_li2(server, [], records, "li2")
 
     server.update_binary_sensor.assert_any_call(
         server, AVE_FAMILY_ANTITHEFT_AREA, 3, -1, "Area"
@@ -398,15 +401,15 @@ def test_manage_lm_and_lmc_update_events(hass: HomeAssistant) -> None:
     server.ave_map.load_areas_from_wsrecords = Mock()
     server.ave_map.load_area_commands = Mock()
 
-    server.manage_lm([], [["1", "Area"]])
+    ws_routing.manage_lm(server, [], [["1", "Area"]])
     assert server.ave_map.areas_loaded is True
-    assert server._thermostat_lm_done.is_set()
+    assert server.thermostat_lm_done.is_set()
 
     server.ave_map.command_loaded = True
-    server.manage_lmc(["2"], [["cmd"]])
+    ws_routing.manage_lmc(server, ["2"], [["cmd"]])
 
     server.ave_map.load_area_commands.assert_called_once_with(2, [["cmd"]])
-    assert server._thermostat_lmc_done.is_set()
+    assert server.thermostat_lmc_done.is_set()
 
 
 async def test_disconnected_command_helpers_cover_remaining_error_paths(

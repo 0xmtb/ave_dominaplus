@@ -108,8 +108,8 @@ async def test_termostats_fetch_flow_sends_lmc_and_wts_when_ready(
     server.ave_map.areas_loaded = True
     server.ave_map.areas = {1: object(), 2: object()}
     server.all_thermostats_raw = {4: {}, 5: {}}
-    server._thermostat_lm_done.set()
-    server._thermostat_lmc_done.set()
+    server.thermostat_lm_done.set()
+    server.thermostat_lmc_done.set()
 
     await server._termostats_fetch_flow()
 

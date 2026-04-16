@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from ..ave_thermostat import AveThermostatProperties
 from ..const import (
     AVE_FAMILY_ANTITHEFT,
     AVE_FAMILY_ANTITHEFT_AREA,
@@ -407,7 +408,7 @@ def manage_lm(
     )
     server.ave_map.load_areas_from_wsrecords(records)
     server.ave_map.areas_loaded = True
-    server._thermostat_lm_done.set()
+    server.thermostat_lm_done.set()
 
 
 def manage_lmc(
@@ -424,14 +425,13 @@ def manage_lmc(
     area_id = int(parameters[0])
     server.ave_map.load_area_commands(area_id, records)
     if server.ave_map.command_loaded:
-        server._thermostat_lmc_done.set()
+        server.thermostat_lmc_done.set()
 
 
 def manage_wts(
     server: AveWebServer,
     parameters: list[Any],
     records: list[list[Any]],
-    thermostat_properties_factory: Any,
 ) -> None:
     """Manage WTS command responses."""
     _LOGGER.debug(
@@ -440,7 +440,7 @@ def manage_wts(
         records,
     )
     device_id = int(parameters[0])
-    thermostat_properties = thermostat_properties_factory.from_wts(parameters, records)
+    thermostat_properties = AveThermostatProperties.from_wts(parameters, records)
     thermostat_properties.device_name = f"thermostat_{thermostat_properties.device_id}"
     if server.settings.get_entity_names:
         thermostat_properties.device_name = server.all_thermostats_raw[device_id][

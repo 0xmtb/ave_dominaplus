@@ -10,32 +10,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from defusedxml import ElementTree as DefusedET
 
-from custom_components.ave_dominaplus.webserver.commands import (
-    cover_close as route_cover_close,
-    cover_open as route_cover_open,
-    cover_stop as route_cover_stop,
-    dimmer_toggle as route_dimmer_toggle,
-    dimmer_turn_off as route_dimmer_turn_off,
-    dimmer_turn_on as route_dimmer_turn_on,
-    scenario_execute as route_scenario_execute,
-    send_thermostat_sts as route_send_thermostat_sts,
-    switch_toggle as route_switch_toggle,
-    switch_turn_off as route_switch_turn_off,
-    switch_turn_on as route_switch_turn_on,
-    thermostat_on_off as route_thermostat_on_off,
-)
-from custom_components.ave_dominaplus.webserver.routing import (
-    manage_gsf as route_manage_gsf,
-    manage_ldi_li2 as route_manage_ldi_li2,
-    manage_lm as route_manage_lm,
-    manage_lmc as route_manage_lmc,
-    manage_upd as route_manage_upd,
-    manage_upd_ws as route_manage_upd_ws,
-    manage_wts as route_manage_wts,
-)
-
 from .ave_map import AveMap
-from .ave_thermostat import AveThermostatProperties
 from .const import (
     AVE_FAMILY_ANTITHEFT_AREA,
     AVE_FAMILY_DIMMER,
@@ -45,6 +20,7 @@ from .const import (
     AVE_FAMILY_SHUTTER_ROLLING,
     AVE_FAMILY_SHUTTER_SLIDING,
 )
+from .webserver import commands as ws_commands, routing as ws_routing
 
 if TYPE_CHECKING:
     from types import MappingProxyType
@@ -141,9 +117,9 @@ class AveWebServer:
         self.update_thermostat: Any = None
         self.ave_map: AveMap = AveMap()
         self._ldi_done = asyncio.Event()
-        self._thermostat_lm_done = asyncio.Event()
-        self._thermostat_lmc_done = asyncio.Event()
-        self._connect_actions_task: asyncio.Task | None = None
+        self.thermostat_lm_done = asyncio.Event()
+        self.thermostat_lmc_done = asyncio.Event()
+        self.connect_actions_task: asyncio.Task | None = None
         self._thermostat_fetch_task: asyncio.Task | None = None
         self.numbers: dict = {}  # Track number entities by unique ID
         self.async_add_number_entities: Any = None
@@ -347,9 +323,9 @@ class AveWebServer:
     async def disconnect(self) -> None:
         """Disconnect from the web server."""
         self.closed = True
-        if self._connect_actions_task and not self._connect_actions_task.done():
-            self._connect_actions_task.cancel()
-            self._connect_actions_task = None
+        if self.connect_actions_task and not self.connect_actions_task.done():
+            self.connect_actions_task.cancel()
+            self.connect_actions_task = None
         if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
             self._thermostat_fetch_task.cancel()
             self._thermostat_fetch_task = None
@@ -380,7 +356,7 @@ class AveWebServer:
                         continue
 
                 if self.started:
-                    self._connect_actions_task = asyncio.create_task(
+                    self.connect_actions_task = asyncio.create_task(
                         self.on_connect_actions()
                     )
 
@@ -445,8 +421,8 @@ class AveWebServer:
         so we need to fetch the map and commands to be able to link thermostats to their device ID and get their names if the setting is enabled.
         """
         self.ave_map = AveMap()
-        self._thermostat_lm_done.clear()
-        self._thermostat_lmc_done.clear()
+        self.thermostat_lm_done.clear()
+        self.thermostat_lmc_done.clear()
 
         if self._thermostat_fetch_task and not self._thermostat_fetch_task.done():
             self._thermostat_fetch_task.cancel()
@@ -468,7 +444,7 @@ class AveWebServer:
     async def _termostats_fetch_flow(self) -> None:
         # 1) wait until LM responses are received and the map is loaded
         try:
-            await asyncio.wait_for(self._thermostat_lm_done.wait(), 15.0)
+            await asyncio.wait_for(self.thermostat_lm_done.wait(), 15.0)
         except TimeoutError:
             _LOGGER.warning(
                 "Timed out waiting for LM responses; skipping thermostat map"
@@ -488,7 +464,7 @@ class AveWebServer:
 
         # 3) wait for all LMC responses (commands loaded)
         try:
-            await asyncio.wait_for(self._thermostat_lmc_done.wait(), 15.0)
+            await asyncio.wait_for(self.thermostat_lmc_done.wait(), 15.0)
         except TimeoutError:
             _LOGGER.warning("Timed out waiting for LMC responses; proceeding")
 
@@ -592,17 +568,17 @@ class AveWebServer:
         elif command == "ping":
             await self.send_ws_command("PONG")
         elif command == "gsf":
-            self.manage_gsf(parameters, records)
+            ws_routing.manage_gsf(self, parameters, records)
         elif command == "upd":
-            self.manage_upd(parameters, records)
+            ws_routing.manage_upd(self, parameters, records)
         elif command in {"ldi", "li2"}:
-            self.manage_ldi_li2(parameters, records, command)
+            ws_routing.manage_ldi_li2(self, parameters, records, command)
         elif command == "lm":
-            self.manage_lm(parameters, records)
+            ws_routing.manage_lm(self, parameters, records)
         elif command == "lmc":
-            self.manage_lmc(parameters, records)
+            ws_routing.manage_lmc(self, parameters, records)
         elif command == "wts":
-            self.manage_wts(parameters, records)
+            ws_routing.manage_wts(self, parameters, records)
         elif command == "cld":
             # cloud commands received from SU2
             pass
@@ -625,92 +601,55 @@ class AveWebServer:
                 },
             )
 
-    def manage_upd(self, parameters, records) -> None:
-        """Manage UPD commands received from the web server."""
-        route_manage_upd(self, parameters, records)
-
-    def manage_upd_ws(
-        self, device_type: int, device_id: int, device_status: int
-    ) -> None:
-        """Manage UPD WS (status update) commands based on device type."""
-        route_manage_upd_ws(self, device_type, device_id, device_status)
-
-    def manage_gsf(self, parameters: list[Any], records: list[list[Any]]) -> None:
-        """Manage GSF Get Status by Family responses."""
-        route_manage_gsf(self, parameters, records)
-
-    def manage_ldi_li2(
-        self, parameters: list[Any], records: list[list[Any]], command: str
-    ) -> None:
-        """Manage LDI/LI2 List Devices commands received from the web server."""
-        route_manage_ldi_li2(self, parameters, records, command)
-
-    def manage_lm(self, parameters, records) -> None:
-        """Manage LM List Map commands received from the web server."""
-        route_manage_lm(self, parameters, records)
-
-    def manage_lmc(self, parameters, records) -> None:
-        """Manage LMC List Map Commands responses."""
-        route_manage_lmc(self, parameters, records)
-
-    def manage_wts(self, parameters: list[Any], records: list[list[Any]]) -> None:
-        """Manage WTS command responses."""
-        route_manage_wts(
-            self,
-            parameters,
-            records,
-            thermostat_properties_factory=AveThermostatProperties,
-        )
-
     async def switch_turn_on(self, device_id: int) -> None:
         """Turn on the switch."""
-        await route_switch_turn_on(self, device_id)
+        await ws_commands.switch_turn_on(self, device_id)
 
     async def switch_turn_off(self, device_id: int) -> None:
         """Turn off the switch."""
-        await route_switch_turn_off(self, device_id)
+        await ws_commands.switch_turn_off(self, device_id)
 
     async def switch_toggle(self, device_id: int) -> None:
         """Toggle the switch."""
-        await route_switch_toggle(self, device_id)
+        await ws_commands.switch_toggle(self, device_id)
 
     async def scenario_execute(self, device_id: int) -> None:
         """Execute a scenario."""
-        await route_scenario_execute(self, device_id)
+        await ws_commands.scenario_execute(self, device_id)
 
     async def dimmer_turn_on(self, device_id: int, brightness_ave: int) -> None:
         """Turn on the dimmer."""
-        await route_dimmer_turn_on(self, device_id, brightness_ave)
+        await ws_commands.dimmer_turn_on(self, device_id, brightness_ave)
 
     async def dimmer_turn_off(self, device_id: int) -> None:
         """Turn off the dimmer."""
-        await route_dimmer_turn_off(self, device_id)
+        await ws_commands.dimmer_turn_off(self, device_id)
 
     async def dimmer_toggle(self, device_id: int) -> None:
         """Toggle the dimmer."""
-        await route_dimmer_toggle(self, device_id)
+        await ws_commands.dimmer_toggle(self, device_id)
 
     async def cover_open(self, device_id: int) -> None:
         """Open the cover."""
-        await route_cover_open(self, device_id)
+        await ws_commands.cover_open(self, device_id)
 
     async def cover_close(self, device_id: int) -> None:
         """Close the cover."""
-        await route_cover_close(self, device_id)
+        await ws_commands.cover_close(self, device_id)
 
     async def cover_stop(self, device_id: int, command: str) -> None:
         """Stop the cover according to AVE movement direction command."""
-        await route_cover_stop(self, device_id, command)
+        await ws_commands.cover_stop(self, device_id, command)
 
     async def send_thermostat_sts(
         self, parameters: list[Any], records: list[list[Any]]
     ) -> None:
         """Send a command to update the thermostat season/temperatures."""
-        await route_send_thermostat_sts(self, parameters, records)
+        await ws_commands.send_thermostat_sts(self, parameters, records)
 
     async def thermostat_on_off(self, device_id: int, on_off: int) -> None:
         """Turn the thermostat on or off."""
-        await route_thermostat_on_off(self, device_id, on_off)
+        await ws_commands.thermostat_on_off(self, device_id, on_off)
 
     async def call_bridge(self, command: str) -> tuple[int, str | None]:
         """Call a xml "rest" bridge for common commands."""
