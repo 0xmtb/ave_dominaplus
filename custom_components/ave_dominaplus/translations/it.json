@@ -7,14 +7,16 @@
         "data": {
           "ip_address": "Indirizzo IP del webserver",
           "get_entities_names": "Usa i nomi entità dal webserver",
-          "fetch_sensor_areas": "Importa le aree antifurto",
+          "fetch_sensor_areas": "Importa le aree antifurto (sensori)",
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "lights_options": "Opzioni luci",
           "fetch_covers": "Importa le tapparelle",
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
-          "fetch_thermostats": "Importa i termostati"
+          "fetch_thermostats": "Importa i termostati",
+          "fetch_antitheft": "Abilita il pannello allarme",
+          "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
           "ip_address": "Il webserver deve essere raggiungibile dall'istanza Home Assistant.",
@@ -22,7 +24,9 @@
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
-          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
+          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
+          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
+          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
         }
       },
       "reconfigure": {
@@ -31,14 +35,16 @@
         "data": {
           "ip_address": "Indirizzo IP del webserver",
           "get_entities_names": "Usa i nomi entità dal webserver",
-          "fetch_sensor_areas": "Importa le aree antifurto",
+          "fetch_sensor_areas": "Importa le aree antifurto (sensori)",
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "lights_options": "Opzioni luci",
           "fetch_covers": "Importa le tapparelle",
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
-          "fetch_thermostats": "Importa i termostati"
+          "fetch_thermostats": "Importa i termostati",
+          "fetch_antitheft": "Abilita il pannello allarme",
+          "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
           "ip_address": "Il webserver deve essere raggiungibile dall'istanza Home Assistant.",
@@ -46,7 +52,9 @@
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
-          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
+          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
+          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
+          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
         }
       },
       "zeroconf_confirm": {
@@ -59,14 +67,16 @@
         "data": {
           "ip_address": "Indirizzo IP del webserver",
           "get_entities_names": "Usa i nomi entità dal webserver",
-          "fetch_sensor_areas": "Importa le aree antifurto",
+          "fetch_sensor_areas": "Importa le aree antifurto (sensori)",
           "fetch_sensors": "Importa i sensori antifurto individuali",
           "fetch_lights": "Importa le luci",
           "lights_options": "Opzioni luci",
           "fetch_covers": "Importa le tapparelle",
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
-          "fetch_thermostats": "Importa i termostati"
+          "fetch_thermostats": "Importa i termostati",
+          "fetch_antitheft": "Abilita il pannello allarme",
+          "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
           "ip_address": "Il webserver deve essere raggiungibile dall'istanza Home Assistant.",
@@ -74,7 +84,25 @@
           "fetch_sensors": "Vengono scoperti al primo evento rilevato. In impianti grandi può creare molte entità.",
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
-          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1)."
+          "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
+          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
+          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
+        }
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "Aree allarme",
+          "description": "Seleziona le aree da inserire per ogni modalità. I nomi vengono letti direttamente dal webserver AVE.",
+          "data": {
+            "arm_away_areas": "Aree inserite in modalità Fuori casa (tutte le zone)",
+            "arm_home_areas": "Aree inserite in modalità In casa (solo perimetro)"
+          },
+          "data_description": {
+            "arm_away_areas": "Di solito tutte le aree. Attivo quando si esce di casa.",
+            "arm_home_areas": "Di solito solo i sensori perimetrali, escludendo i sensori di movimento."
+          }
         }
       }
     },

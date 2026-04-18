@@ -4,6 +4,17 @@ from types import MappingProxyType
 from typing import Any
 
 
+def _parse_areas(value: str) -> list[int]:
+    """Parse a comma-separated string of area numbers into a list of ints.
+
+    Values are the sequential area numbers as returned by the AVE LDI (1, 2, 3, ...).
+    The arm command converts them to bitmask: area N -> bit (N-1) -> 1 << (N-1).
+    """
+    if not value:
+        return []
+    return [int(x.strip()) for x in value.split(",") if x.strip().isdigit()]
+
+
 class AveWebServerSettings:
     """Web server settings class."""
 
@@ -15,6 +26,10 @@ class AveWebServerSettings:
     fetch_covers: bool
     fetch_scenarios: bool
     fetch_thermostats: bool
+    fetch_antitheft: bool
+    antitheft_pin: str
+    arm_away_areas: list[int]
+    arm_home_areas: list[int]
 
     def __init__(self) -> None:
         """Initialize the settings."""
@@ -27,6 +42,10 @@ class AveWebServerSettings:
         self.fetch_scenarios = True
         self.fetch_thermostats = True
         self.on_off_lights_as_switch = True
+        self.fetch_antitheft = False
+        self.antitheft_pin = ""
+        self.arm_away_areas = []
+        self.arm_home_areas = []
 
     @staticmethod
     def from_config_entry_options(
@@ -43,4 +62,8 @@ class AveWebServerSettings:
         settings.fetch_scenarios = options.get("fetch_scenarios", True)
         settings.fetch_thermostats = options.get("fetch_thermostats", True)
         settings.on_off_lights_as_switch = options.get("on_off_lights_as_switch", True)
+        settings.fetch_antitheft = options.get("fetch_antitheft", False)
+        settings.antitheft_pin = options.get("antitheft_pin", "")
+        settings.arm_away_areas = _parse_areas(options.get("arm_away_areas", ""))
+        settings.arm_home_areas = _parse_areas(options.get("arm_home_areas", ""))
         return settings

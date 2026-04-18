@@ -17,7 +17,9 @@
           "fetch_covers": "Get covers",
           "fetch_scenarios": "Get scenarios",
           "on_off_lights_as_switch": "On/Off lights as switches",
-          "fetch_thermostats": "Get thermostats"
+          "fetch_thermostats": "Get thermostats",
+          "fetch_antitheft": "Enable alarm control panel",
+          "antitheft_pin": "Antitheft PIN code"
         },
         "data_description": {
           "ip_address": "The webserver must be reachable from the Home Assistant instance.",
@@ -25,7 +27,9 @@
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
           "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
-          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1)."
+          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1).",
+          "fetch_antitheft": "Exposes a single alarm_control_panel entity for the whole antitheft system.",
+          "antitheft_pin": "PIN used to arm/disarm the antitheft system. Leave empty to use the code passed at runtime."
         }
       },
       "reconfigure": {
@@ -44,7 +48,9 @@
           "fetch_covers": "Get covers",
           "fetch_scenarios": "Get scenarios",
           "on_off_lights_as_switch": "On/Off lights as switches",
-          "fetch_thermostats": "Get thermostats"
+          "fetch_thermostats": "Get thermostats",
+          "fetch_antitheft": "Enable alarm control panel",
+          "antitheft_pin": "Antitheft PIN code"
         },
         "data_description": {
           "ip_address": "The webserver must be reachable from the Home Assistant instance.",
@@ -52,7 +58,9 @@
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
           "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
-          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1)."
+          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1).",
+          "fetch_antitheft": "Exposes a single alarm_control_panel entity for the whole antitheft system.",
+          "antitheft_pin": "PIN used to arm/disarm the antitheft system. Leave empty to use the code passed at runtime."
         }
       },
       "zeroconf_confirm": {
@@ -72,7 +80,9 @@
           "fetch_covers": "Get covers",
           "fetch_scenarios": "Get scenarios",
           "on_off_lights_as_switch": "On/Off lights as switches",
-          "fetch_thermostats": "Get thermostats"
+          "fetch_thermostats": "Get thermostats",
+          "fetch_antitheft": "Enable alarm control panel",
+          "antitheft_pin": "Antitheft PIN code"
         },
         "data_description": {
           "ip_address": "The webserver must be reachable from the Home Assistant instance.",
@@ -80,7 +90,25 @@
           "fetch_sensors": "Will be discovered at the first event they fire. May create many entries in big systems.",
           "fetch_covers": "Adds shutter/cover entities (AVE families 3, 16, 19).",
           "fetch_scenarios": "Adds scenario run buttons and running-state binary sensors (AVE family 6).",
-          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1)."
+          "on_off_lights_as_switch": "Use simple switch entities for On/Off lights (AVE family 1).",
+          "fetch_antitheft": "Exposes a single alarm_control_panel entity for the whole antitheft system.",
+          "antitheft_pin": "PIN used to arm/disarm the antitheft system. Leave empty to use the code passed at runtime."
+        }
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "Alarm areas",
+          "description": "Select which areas to arm for each mode. Area names are read from the AVE webserver.",
+          "data": {
+            "arm_away_areas": "Areas armed when Away (all zones)",
+            "arm_home_areas": "Areas armed when Home (perimeter only)"
+          },
+          "data_description": {
+            "arm_away_areas": "Typically all areas. Selected when leaving home.",
+            "arm_home_areas": "Typically perimeter sensors only, excluding motion detectors."
+          }
         }
       }
     },
