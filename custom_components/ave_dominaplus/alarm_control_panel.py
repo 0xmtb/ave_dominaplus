@@ -213,17 +213,37 @@ class AveAlarmPanel(AlarmControlPanelEntity):
         """Derive panel state from individual area states.
 
         Priority:
-          1. TRIGGERED  — if any area is in alarm (overrides everything)
-          2. DISARMED   — if all areas are clear
-          3. ARMED_HOME / ARMED_AWAY — based on last arm command issued
+          1. TRIGGERED  — if any area reports in-alarm (overrides everything)
+          2. DISARMED   — if all known areas are clear
+          3. ARMED_HOME / ARMED_AWAY — matched by comparing the set of
+             currently armed areas against arm_home_areas / arm_away_areas;
+             falls back to _last_arm_mode when neither matches exactly.
+
+        This means arming from the AVE app (or any external source) is
+        correctly recognised as HOME or AWAY without going through HA.
         """
         if not self._area_states:
             return
+
         if any(s == 2 for s in self._area_states.values()):
             self._attr_alarm_state = AlarmControlPanelState.TRIGGERED
-        elif all(s == 0 for s in self._area_states.values()):
+            return
+
+        if all(s == 0 for s in self._area_states.values()):
             self._attr_alarm_state = AlarmControlPanelState.DISARMED
+            return
+
+        # At least one area is armed — determine the mode.
+        armed_areas = {aid for aid, s in self._area_states.items() if s > 0}
+        arm_home = set(self._webserver.settings.arm_home_areas)
+        arm_away = set(self._webserver.settings.arm_away_areas)
+
+        if arm_home and armed_areas == arm_home:
+            self._attr_alarm_state = AlarmControlPanelState.ARMED_HOME
+        elif arm_away and armed_areas == arm_away:
+            self._attr_alarm_state = AlarmControlPanelState.ARMED_AWAY
         elif self._last_arm_mode == "home":
+            # No exact match but last HA command was HOME — keep it.
             self._attr_alarm_state = AlarmControlPanelState.ARMED_HOME
         else:
             self._attr_alarm_state = AlarmControlPanelState.ARMED_AWAY
