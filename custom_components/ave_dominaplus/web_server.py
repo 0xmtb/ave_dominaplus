@@ -83,6 +83,9 @@ class AveWebServer:
         self.numbers: dict = {}  # Track number entities by unique ID
         self.async_add_number_entities: Any = None
         self.update_th_offset: Any = None
+        self.alarm_panel: Any = None  # Single AveAlarmPanel entity
+        self.async_add_alarm_entities: Any = None
+        self.update_alarm: Any = None
 
     async def set_update_binary_sensor(self, func) -> None:
         """Set the set_update_binary_sensor method for binary sensors."""
@@ -147,6 +150,15 @@ class AveWebServer:
         """Set the method to add/update thermostat offset number entities."""
         if self.update_th_offset is None:
             self.update_th_offset = func
+
+    async def set_update_alarm(self, func) -> None:
+        """Set the update method for alarm control panel entities."""
+        self.update_alarm = func
+
+    async def set_async_add_alarm_entities(self, func) -> None:
+        """Set the async_add_entities method for alarm control panel entities."""
+        if self.async_add_alarm_entities is None:
+            self.async_add_alarm_entities = func
 
     async def is_connected(self) -> bool:
         """Return if the web server is connected."""
@@ -553,6 +565,88 @@ class AveWebServer:
             except Exception:
                 _LOGGER.exception("Error getting WebServer system info")
                 return {}
+
+    async def antitheft_arm(self, area_bitmask: int, code: str | None = None) -> bool:
+        """Arm antitheft areas via antitheft.php.
+
+        Sequence required by AVE WBS:
+          1. GET antitheft.php?command=Codice&codice=<pin>
+          2. GET antitheft.php?command=Clear
+          3. GET antitheft.php?command=Attiva&codice=<area_bitmask>
+
+        area_bitmask maps areas to bits: area 1 -> bit 0 (value 1),
+        area 2 -> bit 1 (value 2), areas 1+2 -> 3, etc.
+        """
+        pin = code or self.settings.antitheft_pin
+        if not pin:
+            _LOGGER.error("antitheft_arm: no PIN configured")
+            return False
+
+        host = self.settings.host
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"http://{host}/antitheft.php"
+                async with session.get(
+                    url, params={"command": "Codice", "codice": pin}
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_arm: Codice failed, status %s", resp.status)
+                        return False
+
+                async with session.get(url, params={"command": "Clear"}) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_arm: Clear failed, status %s", resp.status)
+                        return False
+
+                async with session.get(
+                    url, params={"command": "Attiva", "codice": str(area_bitmask)}
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_arm: Attiva failed, status %s", resp.status)
+                        return False
+
+                _LOGGER.debug("antitheft_arm: bitmask %s armed successfully", area_bitmask)
+                return True
+            except Exception:
+                _LOGGER.exception("antitheft_arm: HTTP error")
+                return False
+
+    async def antitheft_disarm(self, area_bitmask: int, code: str | None = None) -> bool:
+        """Disarm antitheft areas via antitheft.php.
+
+        Sequence: Codice -> Clear -> Disattiva (disarms everything).
+        """
+        pin = code or self.settings.antitheft_pin
+        if not pin:
+            _LOGGER.error("antitheft_disarm: no PIN configured")
+            return False
+
+        host = self.settings.host
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"http://{host}/antitheft.php"
+                async with session.get(
+                    url, params={"command": "Codice", "codice": pin}
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_disarm: Codice failed, status %s", resp.status)
+                        return False
+
+                async with session.get(url, params={"command": "Clear"}) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_disarm: Clear failed, status %s", resp.status)
+                        return False
+
+                async with session.get(url, params={"command": "Disattiva"}) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("antitheft_disarm: Disattiva failed, status %s", resp.status)
+                        return False
+
+                _LOGGER.debug("antitheft_disarm: disarmed successfully")
+                return True
+            except Exception:
+                _LOGGER.exception("antitheft_disarm: HTTP error")
+                return False
 
     async def get_device_list_bridge(self) -> tuple[int, str | None]:
         """Get the device list from the bridge."""

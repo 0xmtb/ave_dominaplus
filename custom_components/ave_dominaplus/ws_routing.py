@@ -45,27 +45,34 @@ def manage_upd(
         )
         manage_upd_ws(server, device_type, device_id, device_status)
     elif parameters[0] == "X" and parameters[1] == "A":  # ANTITHEFT AREA
-        if not server.settings.fetch_sensor_areas:
-            return
-
-        """parameters[2] is the area ID.
-        all other parameters are == 0 when triggered,
-        parameters[6] == 1 when cleared"""
-
+        # parameters[2] = area ID
+        # parameters[3] = engaged  (1 = armed)
+        # parameters[5] = in_alarm (1 = alarm triggered)
+        # parameters[6] = clear    (1 = disarmed/cleared)
         area_progressive = int(parameters[2])
-        # area_engaged = int(parameters[3])
-        # area_in_alarm = int(parameters[5])
-        area_clear = int(parameters[6])
-        status = 1
-        if area_clear > 0:
-            status = 0
-        server.update_binary_sensor(
-            server, AVE_FAMILY_ANTITHEFT_AREA, area_progressive, status
-        )
-        # f"XA - areaID: {area_progressive}
-        # - engaged: {area_engaged}
-        # - clear: {area_clear}
-        # - alarm: {area_in_alarm}")
+        area_engaged = int(parameters[3]) if len(parameters) > 3 else 0
+        area_in_alarm = int(parameters[5]) if len(parameters) > 5 else 0
+        area_clear = int(parameters[6]) if len(parameters) > 6 else 0
+
+        # binary_sensor uses a simple 0/1 (clear/not-clear)
+        bs_status = 0 if area_clear > 0 else 1
+        if server.settings.fetch_sensor_areas:
+            server.update_binary_sensor(
+                server, AVE_FAMILY_ANTITHEFT_AREA, area_progressive, bs_status
+            )
+
+        # alarm_control_panel distinguishes disarmed / armed / triggered
+        # status 0 = disarmed, 1 = armed, 2 = triggered
+        if server.settings.fetch_antitheft and server.update_alarm:
+            if area_in_alarm > 0:
+                alarm_status = 2  # TRIGGERED
+            elif area_engaged > 0:
+                alarm_status = 1  # ARMED
+            else:
+                alarm_status = 0  # DISARMED
+            server.update_alarm(
+                server, AVE_FAMILY_ANTITHEFT_AREA, area_progressive, alarm_status
+            )
     elif parameters[0] == "X" and parameters[1] == "S":  # ANTITHEFT SENSOR
         if not server.settings.fetch_sensors:
             return
@@ -304,7 +311,7 @@ def manage_ldi_li2(
                 # DALI, unhandled
                 continue
             if device_type == AVE_FAMILY_ANTITHEFT_AREA:
-                # Antitheft area
+                # Antitheft area — register as binary sensor (motion/tamper)
                 server.update_binary_sensor(
                     server,
                     AVE_FAMILY_ANTITHEFT_AREA,
@@ -312,6 +319,11 @@ def manage_ldi_li2(
                     -1,
                     device_name,
                 )
+                # Also notify alarm panel so it knows which areas exist
+                if server.settings.fetch_antitheft and server.update_alarm:
+                    server.update_alarm(
+                        server, AVE_FAMILY_ANTITHEFT_AREA, device_id, -1, device_name
+                    )
             elif device_type == AVE_FAMILY_KEYPAD:
                 # Keypad
                 pass

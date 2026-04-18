@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.typing import ConfigType
 
 PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL,
     Platform.BUTTON,
     Platform.BINARY_SENSOR,
     Platform.CLIMATE,
@@ -43,7 +44,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AVE ws from a config entry."""
-    webserver = AveWebServer(entry.data, hass)
+    # Merge config entry data with options so that arm_away_areas / arm_home_areas
+    # set via the options flow (OptionsFlowHandler) override the initial values.
+    webserver = AveWebServer({**entry.data, **entry.options}, hass)
     webserver.config_entry_id = entry.entry_id
     webserver.config_entry_unique_id = entry.unique_id
     if not await webserver.authenticate():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from types import MappingProxyType
 from typing import Any
@@ -9,13 +10,15 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import data_entry_flow
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
-from .const import DOMAIN
+from .const import AVE_FAMILY_ANTITHEFT_AREA, DOMAIN
 from .web_server import AveWebServer
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +65,14 @@ def _build_step_user_data_schema(defaults: dict[str, Any] | None = None) -> vol.
                 "get_entities_names",
                 default=defaults.get("get_entities_names", True),
             ): bool,
+            vol.Optional(
+                "fetch_antitheft",
+                default=defaults.get("fetch_antitheft", False),
+            ): bool,
+            vol.Optional(
+                "antitheft_pin",
+                default=defaults.get("antitheft_pin", ""),
+            ): str,
         }
     )
 
@@ -74,6 +85,12 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
     _discovered_user_input: dict[str, Any] | None = None
     _discovered_title: str | None = None
     _discovered_mac: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlowHandler:
+        """Return the options flow handler."""
+        return OptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -282,9 +299,11 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
                     data_updates=user_input,
                 )
 
+        current = self._get_reconfigure_entry()
+        defaults = {**current.data, **current.options}
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_build_step_user_data_schema(),
+            data_schema=_build_step_user_data_schema(defaults),
             errors=errors,
         )
 
@@ -320,6 +339,123 @@ class AveWsConfigFlow(ConfigFlow, domain=DOMAIN):
             mac_address = format_mac(mac_address)
             await self.async_set_unique_id(mac_address)
         return mac_address
+
+
+class OptionsFlowHandler(OptionsFlow):
+    """Handle options for AVE dominaplus — lets the user pick alarm areas by name."""
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        """Store the config entry."""
+        self._entry = entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show area selection if areas have been discovered, text fallback otherwise."""
+        webserver: AveWebServer | None = self._entry.runtime_data
+        antitheft_areas = []
+        if webserver is not None:
+            if not webserver.raw_ldi:
+                # LDI not yet populated — request a fresh one and wait briefly
+                try:
+                    webserver.ldi_done.clear()
+                    await webserver.send_ws_command("LDI")
+                    await asyncio.wait_for(webserver.ldi_done.wait(), 5.0)
+                except (TimeoutError, Exception):
+                    _LOGGER.warning("Timed out waiting for LDI response in options flow")
+            antitheft_areas = [
+                d for d in webserver.raw_ldi
+                if d["device_type"] == AVE_FAMILY_ANTITHEFT_AREA
+            ]
+            _LOGGER.debug(
+                "Options flow: raw_ldi has %d entries, %d antitheft areas (type %d)",
+                len(webserver.raw_ldi),
+                len(antitheft_areas),
+                AVE_FAMILY_ANTITHEFT_AREA,
+            )
+
+        if antitheft_areas:
+            return await self._async_step_with_areas(user_input, antitheft_areas)
+        return await self._async_step_no_areas(user_input)
+
+    async def _async_step_with_areas(
+        self,
+        user_input: dict[str, Any] | None,
+        areas: list[dict],
+    ) -> ConfigFlowResult:
+        """Show a multi-select with real area names."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    "arm_away_areas": ",".join(user_input.get("arm_away_areas", [])),
+                    "arm_home_areas": ",".join(user_input.get("arm_home_areas", [])),
+                },
+            )
+
+        # Build select options from discovered areas
+        options = [
+            {
+                "value": str(a["device_id"]),
+                "label": a["device_name"] or f"Area {a['device_id']}",
+            }
+            for a in areas
+        ]
+
+        # Pre-select previously saved values
+        current_away = _split_areas(
+            self._entry.options.get("arm_away_areas", self._entry.data.get("arm_away_areas", ""))
+        )
+        current_home = _split_areas(
+            self._entry.options.get("arm_home_areas", self._entry.data.get("arm_home_areas", ""))
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Optional("arm_away_areas", default=current_away): SelectSelector(
+                    SelectSelectorConfig(options=options, multiple=True)
+                ),
+                vol.Optional("arm_home_areas", default=current_home): SelectSelector(
+                    SelectSelectorConfig(options=options, multiple=True)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def _async_step_no_areas(
+        self, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        """Fallback text input when no areas have been discovered yet."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    "arm_away_areas": user_input.get("arm_away_areas", ""),
+                    "arm_home_areas": user_input.get("arm_home_areas", ""),
+                },
+            )
+
+        current_away = self._entry.options.get(
+            "arm_away_areas", self._entry.data.get("arm_away_areas", "")
+        )
+        current_home = self._entry.options.get(
+            "arm_home_areas", self._entry.data.get("arm_home_areas", "")
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Optional("arm_away_areas", default=current_away): str,
+                vol.Optional("arm_home_areas", default=current_home): str,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+
+def _split_areas(value: str) -> list[str]:
+    """Split a comma-separated area string into a list of stripped strings."""
+    if not value:
+        return []
+    return [s.strip() for s in value.split(",") if s.strip()]
 
 
 class CannotConnect(HomeAssistantError):
