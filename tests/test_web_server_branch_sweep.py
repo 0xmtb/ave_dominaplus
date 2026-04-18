@@ -312,6 +312,32 @@ def test_manage_upd_covers_remaining_noop_and_unknown_branches(
     server.update_cover.assert_not_called()
 
 
+def test_manage_upd_wt_z_routes_to_update_thermostat(hass: HomeAssistant) -> None:
+    """WT Z (on/off by device ID) should call update_thermostat, not be silently dropped."""
+    server = make_server(hass)
+    server.update_thermostat = Mock()
+    server.update_th_offset = Mock()
+
+    ws_routing.manage_upd(server, ["WT", "Z", "5", "1"], [])
+
+    server.update_thermostat.assert_called_once()
+    server.update_th_offset.assert_not_called()
+
+
+def test_manage_upd_wt_o_routes_to_update_thermostat_and_offset(
+    hass: HomeAssistant,
+) -> None:
+    """WT O (offset by device ID) should call both update_thermostat and update_th_offset."""
+    server = make_server(hass)
+    server.update_thermostat = Mock()
+    server.update_th_offset = Mock()
+
+    ws_routing.manage_upd(server, ["WT", "O", "5", "30"], [])
+
+    server.update_thermostat.assert_called_once()
+    server.update_th_offset.assert_called_once()
+
+
 def test_manage_upd_tt_unknown_command_is_ignored(hass: HomeAssistant) -> None:
     """TT/TR/TL updates should be skipped if map command id is unknown."""
     server = make_server(hass)
