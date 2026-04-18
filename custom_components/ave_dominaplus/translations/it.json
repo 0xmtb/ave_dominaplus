@@ -15,7 +15,6 @@
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati",
-          "fetch_antitheft": "Abilita il pannello allarme",
           "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
@@ -25,8 +24,7 @@
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
-          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
-          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
+          "antitheft_pin": "Se impostato, crea un pannello alarm_control_panel per inserire/disinserire il sistema antifurto."
         }
       },
       "reconfigure": {
@@ -43,7 +41,6 @@
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati",
-          "fetch_antitheft": "Abilita il pannello allarme",
           "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
@@ -53,8 +50,7 @@
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
-          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
-          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
+          "antitheft_pin": "Se impostato, crea un pannello alarm_control_panel per inserire/disinserire il sistema antifurto."
         }
       },
       "zeroconf_confirm": {
@@ -75,7 +71,6 @@
           "fetch_scenarios": "Importa gli scenari",
           "on_off_lights_as_switch": "Luci On/Off come interruttori",
           "fetch_thermostats": "Importa i termostati",
-          "fetch_antitheft": "Abilita il pannello allarme",
           "antitheft_pin": "Codice PIN antifurto"
         },
         "data_description": {
@@ -85,8 +80,7 @@
           "fetch_covers": "Aggiunge entità tapparella/copertura (famiglie AVE 3, 16, 19).",
           "fetch_scenarios": "Aggiunge pulsanti di esecuzione scenario e binary sensor di stato in esecuzione (famiglia AVE 6).",
           "on_off_lights_as_switch": "Usa semplici entità switch per le luci On/Off (famiglia AVE 1).",
-          "fetch_antitheft": "Espone un unico pannello alarm_control_panel per l'intero sistema antifurto.",
-          "antitheft_pin": "PIN usato per inserire/disinserire l'impianto. Lasciare vuoto per passarlo a runtime."
+          "antitheft_pin": "Se impostato, crea un pannello alarm_control_panel per inserire/disinserire il sistema antifurto."
         }
       }
     },

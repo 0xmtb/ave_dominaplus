@@ -63,7 +63,7 @@ def manage_upd(
 
         # alarm_control_panel distinguishes disarmed / armed / triggered
         # status 0 = disarmed, 1 = armed, 2 = triggered
-        if server.settings.fetch_antitheft and server.update_alarm:
+        if server.settings.antitheft_pin and server.update_alarm:
             if area_in_alarm > 0:
                 alarm_status = 2  # TRIGGERED
             elif area_engaged > 0:
@@ -320,7 +320,7 @@ def manage_ldi_li2(
                     device_name,
                 )
                 # Also notify alarm panel so it knows which areas exist
-                if server.settings.fetch_antitheft and server.update_alarm:
+                if server.settings.antitheft_pin and server.update_alarm:
                     server.update_alarm(
                         server, AVE_FAMILY_ANTITHEFT_AREA, device_id, -1, device_name
                     )

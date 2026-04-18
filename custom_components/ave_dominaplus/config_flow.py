@@ -66,10 +66,6 @@ def _build_step_user_data_schema(defaults: dict[str, Any] | None = None) -> vol.
                 default=defaults.get("get_entities_names", True),
             ): bool,
             vol.Optional(
-                "fetch_antitheft",
-                default=defaults.get("fetch_antitheft", False),
-            ): bool,
-            vol.Optional(
                 "antitheft_pin",
                 default=defaults.get("antitheft_pin", ""),
             ): str,

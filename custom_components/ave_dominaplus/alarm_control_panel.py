@@ -33,7 +33,7 @@ async def async_setup_entry(
         _LOGGER.error("AVE dominaplus: Web server not initialized")
         raise ConfigEntryNotReady("Can't reach webserver")
 
-    if not webserver.settings.fetch_antitheft:
+    if not webserver.settings.antitheft_pin:
         return
 
     panel = AveAlarmPanel(webserver=webserver)

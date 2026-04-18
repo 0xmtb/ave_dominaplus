@@ -26,7 +26,6 @@ class AveWebServerSettings:
     fetch_covers: bool
     fetch_scenarios: bool
     fetch_thermostats: bool
-    fetch_antitheft: bool
     antitheft_pin: str
     arm_away_areas: list[int]
     arm_home_areas: list[int]
@@ -42,7 +41,6 @@ class AveWebServerSettings:
         self.fetch_scenarios = True
         self.fetch_thermostats = True
         self.on_off_lights_as_switch = True
-        self.fetch_antitheft = False
         self.antitheft_pin = ""
         self.arm_away_areas = []
         self.arm_home_areas = []
@@ -62,7 +60,6 @@ class AveWebServerSettings:
         settings.fetch_scenarios = options.get("fetch_scenarios", True)
         settings.fetch_thermostats = options.get("fetch_thermostats", True)
         settings.on_off_lights_as_switch = options.get("on_off_lights_as_switch", True)
-        settings.fetch_antitheft = options.get("fetch_antitheft", False)
         settings.antitheft_pin = options.get("antitheft_pin", "")
         settings.arm_away_areas = _parse_areas(options.get("arm_away_areas", ""))
         settings.arm_home_areas = _parse_areas(options.get("arm_home_areas", ""))
