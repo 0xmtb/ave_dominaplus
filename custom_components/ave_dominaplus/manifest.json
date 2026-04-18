@@ -1,13 +1,13 @@
 {
   "domain": "ave_dominaplus",
   "name": "AVE dominaplus",
-  "codeowners": ["@emmeoerre"],
+  "codeowners": ["@emmeoerre", "@0xmtb"],
   "config_flow": true,
-  "documentation": "https://github.com/emmeoerre/ave_dominaplus",
+  "documentation": "https://github.com/0xmtb/ave_dominaplus",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/emmeoerre/ave_dominaplus/issues",
-  "version": "1.5.1",
+  "issue_tracker": "https://github.com/0xmtb/ave_dominaplus/issues",
+  "version": "1.5.1.1",
   "zeroconf": [
     {
       "type": "_udisks-ssh._tcp.local.",
