@@ -111,6 +111,20 @@ class AveAlarmPanel(AlarmControlPanelEntity):
 
         self._attr_alarm_state = AlarmControlPanelState.DISARMED
         self._unique_id = f"ave_alarm_panel_{webserver.mac_address}"
+        self._pending_state_write = False
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity added to Home Assistant."""
+        await super().async_added_to_hass()
+        self._webserver.register_availability_entity(self)
+        if self._pending_state_write:
+            self._pending_state_write = False
+            self.async_write_ha_state()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal from Home Assistant."""
+        self._webserver.unregister_availability_entity(self)
+        await super().async_will_remove_from_hass()
 
     # ------------------------------------------------------------------
     # HA entity properties
@@ -186,6 +200,13 @@ class AveAlarmPanel(AlarmControlPanelEntity):
         self._area_states[area_id] = status
         self._attr_available = True
         self._recompute_state()
+        self._write_state_or_defer()
+
+    def _write_state_or_defer(self) -> None:
+        """Write state now if entity is attached to HA, otherwise defer."""
+        if self.hass is None or self.entity_id is None:
+            self._pending_state_write = True
+            return
         self.async_write_ha_state()
 
     def _recompute_state(self) -> None:

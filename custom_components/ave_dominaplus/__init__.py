@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await _async_cleanup_stale_devices(hass, entry)
 
-    hass.async_create_task(webserver.start())
+    hass.async_create_background_task(webserver.start(), name="ave_dominaplus_webserver")
     return True
 
 
